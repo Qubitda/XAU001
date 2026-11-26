@@ -12,10 +12,15 @@ import type {
 } from '../types';
 
 export function getSizeUnitLabel(category: ProductState['category']): string {
-  if (category === 'Kolye') return 'Zincir Boyu';
-  if (category === 'Bileklik') return 'Bileklik Boyu';
-  if (category === 'Küpe') return 'Çap / Boy';
+  const key = (category || '').trim().toLocaleUpperCase('tr-TR');
+  if (key === 'KOLYE' || category === 'Kolye') return 'Zincir Boyu';
+  if (key === 'BILEKLIK' || category === 'Bileklik') return 'Bileklik Boyu';
+  if (key === 'KUPE' || category === 'Küpe') return 'Çap / Boy';
   return 'Yüzük Ölçüsü';
+}
+
+function isRingCategoryValue(category: string): boolean {
+  return category === 'YUZUK' || category.toLocaleLowerCase('tr-TR') === 'yüzük';
 }
 
 function resolveMatchingVariantId(
@@ -90,8 +95,9 @@ export function buildB2bOrderLineFromProduct(params: {
   const { product, computed, rates } = params;
   const targetSize = params.sizeOverride ?? product.variantSize;
   const sizeDiff = targetSize - product.variantSize;
-  const weightDelta =
-    product.category === 'Yüzük' ? sizeDiff * 0.07 : sizeDiff * 0.04;
+  const weightDelta = isRingCategoryValue(product.category)
+    ? sizeDiff * 0.07
+    : sizeDiff * 0.04;
   const adjustedGross = Math.max(1.0, Number((product.grossWeightGram + weightDelta).toFixed(2)));
   const grossRatio =
     product.grossWeightGram > 0 ? adjustedGross / product.grossWeightGram : 1;

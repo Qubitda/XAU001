@@ -107,14 +107,26 @@ const MEDIA_REGISTRY: Record<
   },
 };
 
+/** Canonical media-registry keys for metal_rengi codes + legacy labels. */
+function canonicalizeMetalColor(color: string): MetalColor {
+  const raw = (color || '').trim();
+  const upper = raw.toLocaleUpperCase('tr-TR');
+  if (upper === 'BEYAZ' || raw === 'Beyaz') return 'Beyaz';
+  if (upper === 'SARI' || raw === 'Sarı') return 'Sarı';
+  if (upper === 'ROSE' || raw === 'Rose' || raw.startsWith('Rose')) return 'Rose';
+  return raw as MetalColor;
+}
+
 function computeToneFallbackFilter(
   baseColor: MetalColor,
   targetColor: MetalColor
 ): string | undefined {
-  if (baseColor === targetColor) return undefined;
-  if (targetColor === 'Beyaz') return 'saturate(0.32) brightness(1.04) contrast(1.03)';
-  if (targetColor === 'Sarı') return 'sepia(0.38) saturate(1.45) hue-rotate(-6deg) brightness(1.02)';
-  if (targetColor === 'Rose') return 'sepia(0.36) saturate(1.35) hue-rotate(-24deg) brightness(1.01)';
+  const base = canonicalizeMetalColor(baseColor);
+  const target = canonicalizeMetalColor(targetColor);
+  if (base === target) return undefined;
+  if (target === 'Beyaz') return 'saturate(0.32) brightness(1.04) contrast(1.03)';
+  if (target === 'Sarı') return 'sepia(0.38) saturate(1.45) hue-rotate(-6deg) brightness(1.02)';
+  if (target === 'Rose') return 'sepia(0.36) saturate(1.35) hue-rotate(-24deg) brightness(1.01)';
   return undefined;
 }
 
@@ -125,10 +137,11 @@ export function resolveProductMedia(
 ): ResolvedProductMedia {
   const customPhotos = (galleryImages ?? []).filter((u) => isRenderableMediaUrl(u));
   const entry = MEDIA_REGISTRY[parentSku];
+  const tone = canonicalizeMetalColor(metalColor);
 
   // Prefer color-accurate registry shots so home + collection share the same metal look.
   if (entry) {
-    const nativeColorUrl = entry.byColor[metalColor];
+    const nativeColorUrl = entry.byColor[tone] ?? entry.byColor[metalColor];
     if (nativeColorUrl) {
       return {
         mainUrl: nativeColorUrl,
@@ -151,7 +164,7 @@ export function resolveProductMedia(
       hoverLabel:
         customPhotos.length > 1 ? 'Galeri Görseli' : entry.hoverLabel,
       binding: customPhotos.length > 0 ? 'RENK' : 'PARENT',
-      toneFilter: computeToneFallbackFilter(entry.defaultColor, metalColor),
+      toneFilter: computeToneFallbackFilter(entry.defaultColor, tone),
     };
   }
 
@@ -166,7 +179,7 @@ export function resolveProductMedia(
   }
 
   // Unknown SKU → SE009 registry (keeps demo catalog consistent)
-  return resolveProductMedia('SE009', metalColor);
+  return resolveProductMedia('SE009', tone);
 }
 
 export function isRenderableMediaUrl(url: string | undefined | null): boolean {
@@ -196,8 +209,8 @@ export function resolveProductThumbnail(product: ProductState): string {
  */
 export function resolveProductGallery(product: ProductState): ProductMediaItem[] {
   const base = resolveProductMedia(product.parentSku, product.metalColor);
-  const code =
-    product.metalColor === 'Beyaz' ? 'BYZ' : product.metalColor === 'Sarı' ? 'SRY' : 'RSE';
+  const tone = canonicalizeMetalColor(product.metalColor);
+  const code = tone === 'Beyaz' ? 'BYZ' : tone === 'Sarı' ? 'SRY' : 'RSE';
 
   const customPhotos = (product.galleryImages ?? []).filter((u) => isRenderableMediaUrl(u));
   const items: ProductMediaItem[] = [];

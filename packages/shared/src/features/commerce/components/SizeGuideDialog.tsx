@@ -33,7 +33,18 @@ const CHAIN_LENGTHS = [
 ];
 
 export function SizeGuideDialog({ open, onOpenChange, category }: SizeGuideDialogProps) {
-  const isRing = category === 'Yüzük';
+  const isRing =
+    category === 'YUZUK' || category.toLocaleLowerCase('tr-TR') === 'yüzük';
+  const displayCategory =
+    category === 'YUZUK'
+      ? 'Yüzük'
+      : category === 'KOLYE'
+        ? 'Kolye'
+        : category === 'BILEKLIK'
+          ? 'Bileklik'
+          : category === 'KUPE'
+            ? 'Küpe'
+            : category;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -46,7 +57,7 @@ export function SizeGuideDialog({ open, onOpenChange, category }: SizeGuideDialo
           <div className="flex items-center gap-2">
             <Ruler className="w-4 h-4 text-muted-foreground" />
             <DialogTitle className="font-serif text-xl font-normal text-foreground">
-              {isRing ? 'Yüzük Ölçü Rehberi (TR)' : `${category} Boy Rehberi`}
+              {isRing ? 'Yüzük Ölçü Rehberi (TR)' : `${displayCategory} Boy Rehberi`}
             </DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUpRight,
@@ -36,10 +36,27 @@ import {
   TARA_SELECT_CLASS,
 } from '../features/storefront/components/StorefrontUI';
 import { BrandTrustStrip } from '../features/storefront/components/BrandTrustStrip';
+import {
+  matchesDefinitionValue,
+  resolveDefinitionLabel,
+  usePublicDefinitionOptions,
+} from '../features/definitions/hooks/useDefinitionsQuery';
+import {
+  LEGACY_STOREFRONT_CATEGORY_CODES,
+  pickStorefrontCategories,
+} from '../features/definitions/storefrontCategories';
 
 import heroEditorialImg from '../assets/images/hero-tara-gold.jpg';
 
 const HERO_IMAGE_URL = heroEditorialImg;
+
+const FALLBACK_COLORS = [
+  { value: 'BEYAZ', label: 'Beyaz' },
+  { value: 'SARI', label: 'Sarı' },
+  { value: 'ROSE', label: 'Rose' },
+] as const;
+
+const STOREFRONT_COLOR_FILTER_CODES = ['BEYAZ', 'SARI', 'ROSE'] as const;
 
 interface StorefrontViewProps {
   products: ProductState[];
@@ -61,8 +78,6 @@ interface StorefrontViewProps {
 type SortOption = 'featured' | 'price_asc' | 'price_desc' | 'carat_desc';
 type MerchFilter = 'all' | 'discounted' | 'new_collection';
 
-const CATEGORIES = ['Tümü', 'Yüzük', 'Kolye', 'Bileklik', 'Küpe'] as const;
-
 export function StorefrontView({
   products,
   rates,
@@ -77,6 +92,56 @@ export function StorefrontView({
   onQuickAddB2c,
   onQuickAddB2b,
 }: StorefrontViewProps) {
+  const categoryDefs = usePublicDefinitionOptions('kategori');
+  const colorDefs = usePublicDefinitionOptions('metal_rengi');
+
+  const categoryOptions = useMemo(() => {
+    if (categoryDefs.options.length > 0) return categoryDefs.options;
+    return LEGACY_STOREFRONT_CATEGORY_CODES.map((code) => ({
+      value: code,
+      label:
+        code === 'YUZUK'
+          ? 'Yüzük'
+          : code === 'KOLYE'
+            ? 'Kolye'
+            : code === 'KUPE'
+              ? 'Küpe'
+              : 'Bileklik',
+      code,
+      id: code,
+      meta: { showOnStorefront: true },
+      parentCodes: [] as string[],
+      parentLabels: [] as string[],
+    }));
+  }, [categoryDefs.options]);
+
+  const colorOptions = useMemo(() => {
+    if (colorDefs.options.length > 0) return colorDefs.options;
+    return FALLBACK_COLORS.map((c) => ({
+      value: c.value,
+      label: c.label,
+      code: c.value,
+      id: c.value,
+      meta: {},
+      parentCodes: [] as string[],
+      parentLabels: [] as string[],
+    }));
+  }, [colorDefs.options]);
+
+  /** Dropdown: core tones only — full metal_rengi stays in colorOptions for matching. */
+  const colorFilterOptions = useMemo(() => {
+    const primary = STOREFRONT_COLOR_FILTER_CODES.map((code) =>
+      colorOptions.find((o) => o.code === code)
+    ).filter((o): o is NonNullable<typeof o> => Boolean(o));
+    return primary.length > 0 ? primary : colorOptions.slice(0, 3);
+  }, [colorOptions]);
+
+  /** Tab list from meta.showOnStorefront (same SSOT as CategoryStrip / footer). */
+  const navCategoryOptions = useMemo(
+    () => pickStorefrontCategories(categoryOptions),
+    [categoryOptions]
+  );
+
   const [category, setCategory] = useState<string>(initialCategory);
   const [colorFilter, setColorFilter] = useState<'Tümü' | MetalColor>('Tümü');
   const [merchFilter, setMerchFilter] = useState<MerchFilter>(initialMerchFilter);
@@ -85,6 +150,21 @@ export function StorefrontView({
   const [cardPreviewColors, setCardPreviewColors] = useState<Record<string, MetalColor>>({});
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [recentAddedSku, setRecentAddedSku] = useState<string | null>(null);
+  const categoryNormalized = useRef(false);
+
+  // Normalize URL/legacy label (?category=Yüzük) → definition code (YUZUK).
+  useEffect(() => {
+    if (categoryNormalized.current || category === 'Tümü') return;
+    if (categoryDefs.options.length === 0 && colorDefs.isLoading) return;
+    const match = categoryOptions.find(
+      (o) => o.value === category || o.code === category || o.label === category
+    );
+    categoryNormalized.current = true;
+    if (match && category !== match.value) setCategory(match.value);
+  }, [category, categoryOptions, categoryDefs.options.length, colorDefs.isLoading]);
+
+  const categoryLabel =
+    category === 'Tümü' ? 'Tümü' : resolveDefinitionLabel(category, categoryOptions) || category;
 
   const flashAdded = (key: string) => {
     setRecentAddedSku(key);
@@ -115,8 +195,20 @@ export function StorefrontView({
   const filteredItems = useMemo(() => {
     const q = searchQuery.trim().toLocaleLowerCase('tr-TR');
     const filtered = computedCatalog.filter(({ product, metrics }) => {
-      if (category !== 'Tümü' && product.category !== category) return false;
-      if (colorFilter !== 'Tümü' && !product.availableColors.includes(colorFilter)) return false;
+      if (
+        category !== 'Tümü' &&
+        !matchesDefinitionValue(product.category, category, categoryOptions)
+      ) {
+        return false;
+      }
+      if (colorFilter !== 'Tümü') {
+        const colorHit =
+          matchesDefinitionValue(product.metalColor, colorFilter, colorOptions) ||
+          product.availableColors.some((c) =>
+            matchesDefinitionValue(c, colorFilter, colorOptions)
+          );
+        if (!colorHit) return false;
+      }
       if (merchFilter === 'discounted') {
         const hasRoleDiscount =
           role === 'b2b'
@@ -156,7 +248,17 @@ export function StorefrontView({
       return [...filtered].sort((a, b) => b.metrics.totalStoneCarat - a.metrics.totalStoneCarat);
     }
     return filtered;
-  }, [computedCatalog, category, colorFilter, merchFilter, role, searchQuery, sortBy]);
+  }, [
+    computedCatalog,
+    category,
+    categoryOptions,
+    colorFilter,
+    colorOptions,
+    merchFilter,
+    role,
+    searchQuery,
+    sortBy,
+  ]);
 
   const featuredSignature = computedCatalog[0];
   const hasActiveFilters =
@@ -186,6 +288,18 @@ export function StorefrontView({
     document.getElementById('koleksiyon-grid')?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const navCategories = useMemo(() => {
+    const base = [{ value: 'Tümü', label: 'Tümü' }, ...navCategoryOptions];
+    // Deep-link to a non-primary category (e.g. ?category=ALYANS) — keep it visible while active.
+    if (category !== 'Tümü' && !base.some((c) => c.value === category)) {
+      const extra = categoryOptions.find(
+        (o) => o.value === category || o.code === category || o.label === category
+      );
+      if (extra) return [...base, extra];
+    }
+    return base;
+  }, [navCategoryOptions, category, categoryOptions]);
+
   // =========================================================================
   // B2C STOREFRONT — TARA DIAMOND LUXURY COLLECTION / SEARCH / FILTER VIEW
   // =========================================================================
@@ -201,7 +315,7 @@ export function StorefrontView({
             ? 'Yeni Gelenler'
             : category === 'Tümü'
               ? 'Tüm Koleksiyon'
-              : `${category} Koleksiyonu`;
+              : `${categoryLabel} Koleksiyonu`;
 
     const pageSubtitle =
       'GIA ve HRD sertifikalı pırlantalar, 14 ve 18 ayar altın işçiliğiyle atölyemizde hazırlanır. Altın rengini kart üzerinden anında önizleyebilirsiniz.';
@@ -218,7 +332,7 @@ export function StorefrontView({
             ...(category !== 'Tümü'
               ? [
                   { label: 'Koleksiyon', onClick: () => setCategory('Tümü') },
-                  { label: category },
+                  { label: categoryLabel },
                 ]
               : [{ label: 'Koleksiyon' }]),
           ]}
@@ -231,36 +345,40 @@ export function StorefrontView({
 
         {/* Category Underline Tabs + Search / Filter / Sort Bar */}
         <section id="koleksiyon-grid" className="space-y-5 scroll-mt-24">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border pb-4">
-            {/* Horizontal Category Navigation */}
+          <div className="space-y-3 border-b border-border pb-4">
+            {/* Horizontal Category Navigation — own row so filters never crush tabs */}
             <div
               role="tablist"
               aria-label="Mücevher kategorileri"
-              className="flex items-center gap-5 sm:gap-7 overflow-x-auto no-scrollbar pb-1"
+              className="flex items-center gap-5 sm:gap-7 overflow-x-auto no-scrollbar"
             >
-              {CATEGORIES.map((cat) => {
-                const active = category === cat;
+              {navCategories.map((cat) => {
+                const active = category === cat.value;
                 const count =
-                  cat === 'Tümü'
+                  cat.value === 'Tümü'
                     ? products.length
-                    : products.filter((p) => p.category === cat).length;
+                    : products.filter((p) =>
+                        matchesDefinitionValue(p.category, cat.value, categoryOptions)
+                      ).length;
                 return (
                   <button
-                    key={cat}
+                    key={cat.value}
                     type="button"
                     role="tab"
                     aria-selected={active}
-                    onClick={() => setCategory(cat)}
+                    onClick={() => setCategory(cat.value)}
                     className={`relative pb-2 text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
                       active
                         ? 'text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-[1.5px] after:bg-primary'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <span>{cat}</span>
-                    <span className="ml-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
-                      {count}
-                    </span>
+                    <span>{cat.label}</span>
+                    {count > 0 && (
+                      <span className="ml-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+                        {count}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -268,7 +386,7 @@ export function StorefrontView({
 
             {/* Search & Refinement Controls */}
             <div className="flex flex-wrap items-center gap-2.5">
-              <div className="relative flex-1 min-w-[200px] sm:min-w-[220px]">
+              <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[200px] sm:max-w-[280px]">
                 <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="search"
@@ -297,9 +415,11 @@ export function StorefrontView({
                 className={TARA_SELECT_CLASS}
               >
                 <option value="Tümü">Tüm Altın Renkleri</option>
-                <option value="Beyaz">Beyaz Altın</option>
-                <option value="Sarı">Sarı Altın</option>
-                <option value="Rose">Rose Altın</option>
+                {colorFilterOptions.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label === 'Rose (Kırmızı)' ? 'Rose' : c.label} Altın
+                  </option>
+                ))}
               </select>
 
               <select
@@ -521,7 +641,7 @@ export function StorefrontView({
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-border pb-4">
           <div>
             <h2 className="text-page-title text-2xl md:text-3xl">
-              {category === 'Tümü' ? 'Seçkin Koleksiyon' : `${category} Koleksiyonu`}
+              {category === 'Tümü' ? 'Seçkin Koleksiyon' : `${categoryLabel} Koleksiyonu`}
             </h2>
             <p className="text-xs text-muted-foreground mt-1 tabular-nums">
               {filteredItems.length} tasarım listeleniyor · Altın rengini kart üzerinden anında
@@ -554,18 +674,18 @@ export function StorefrontView({
               role === 'b2b' ? 'bg-muted border border-border' : 'bg-muted border border-border'
             }`}
           >
-            {CATEGORIES.map((cat) => (
+            {navCategories.map((cat) => (
               <button
-                key={cat}
+                key={cat.value}
                 type="button"
-                onClick={() => setCategory(cat)}
+                onClick={() => setCategory(cat.value)}
                 className={`px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  category === cat
+                  category === cat.value
                     ? 'bg-white text-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {cat}
+                {cat.label}
               </button>
             ))}
           </div>
@@ -589,9 +709,11 @@ export function StorefrontView({
               className="px-3 py-2 text-xs bg-white border border-border rounded-md text-foreground focus:outline-none focus:border-ring"
             >
               <option value="Tümü">Tüm Altın Renkleri</option>
-              <option value="Beyaz">Beyaz Altın</option>
-              <option value="Sarı">Sarı Altın</option>
-              <option value="Rose">Rose Altın</option>
+              {colorOptions.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label} Altın
+                </option>
+              ))}
             </select>
 
             <select

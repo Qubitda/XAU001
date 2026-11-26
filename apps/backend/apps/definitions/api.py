@@ -1,6 +1,14 @@
 """OPS HTTP layer for definition groups and options — thin views over services."""
 
+from __future__ import annotations
+
+import uuid
+from pathlib import PurePosixPath
+
+from django.conf import settings
+from django.core.files.storage import default_storage
 from drf_spectacular.utils import extend_schema
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
@@ -22,6 +30,10 @@ from apps.definitions.services import (
     serialize_table,
     update_definition_item,
 )
+from config.exceptions import DomainError
+
+_ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
 
 class OpsDefinitionTableListView(APIView):
@@ -161,3 +173,36 @@ class OpsSalesChannelsView(APIView):
     )
     def get(self, request: Request):
         return envelope_response({"salesChannels": serialize_sales_channels()}, request)
+
+
+class OpsDefinitionMediaUploadView(APIView):
+    """Upload an image for definition meta (e.g. kategori storefrontImageUrl)."""
+
+    permission_classes = [HasPortalPermission]
+    ops_only = True
+    required_permission = "catalog:write"
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(tags=["OPS - Tanımlar"], summary="Tanım görseli yükle")
+    def post(self, request: Request):
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise DomainError("Dosya gerekli (file).", code="DEFINITION_MEDIA_REQUIRED", status_code=400)
+        if upload.size and upload.size > _MAX_UPLOAD_BYTES:
+            raise DomainError(
+                "Görsel en fazla 8 MB olabilir.",
+                code="DEFINITION_MEDIA_TOO_LARGE",
+                status_code=400,
+            )
+        ext = PurePosixPath(upload.name or "").suffix.lower()
+        if ext not in _ALLOWED_IMAGE_EXT:
+            raise DomainError(
+                "Desteklenen uzantılar: jpg, jpeg, png, webp, gif.",
+                code="DEFINITION_MEDIA_TYPE",
+                status_code=400,
+            )
+        filename = f"definitions/{uuid.uuid4().hex}{ext}"
+        saved = default_storage.save(filename, upload)
+        relative = f"{settings.MEDIA_URL.rstrip('/')}/{saved.lstrip('/')}"
+        absolute = request.build_absolute_uri(relative)
+        return envelope_response({"url": absolute, "path": relative}, request, status=201)

@@ -70,28 +70,36 @@ TABLE_USAGE: dict[str, dict[str, Any]] = {
     "kategori": {
         "businessDomain": "Katalog",
         "usagePurpose": "Ürün kategorisi. Alt kategori, zincir ve kopça seçenekleri buna bağlıdır.",
-        "usedInApps": ["ops"],
-        "usedInScreens": ["Ürün oluşturma / düzenleme (PIM)"],
+        "usedInApps": ["ops", "storefront"],
+        "usedInScreens": [
+            "Ürün oluşturma / düzenleme (PIM)",
+            "B2C CategoryStrip / StorefrontView kategori nav",
+            "OPS Katalog kategori filtresi",
+        ],
         "bindsToEntity": "ProductModel.category",
-        "valueStrategy": "label",
+        "valueStrategy": "code",
         "parentFilter": False,
         "dynamicCapable": True,
-        "criticalMeta": [],
+        "criticalMeta": ["showOnStorefront", "storefrontImageUrl"],
         "integrationStatus": "wired",
-        "howToAddOption": "Yeni kategori ekleyin; bağlı alt_kategori / zincir_tipi / kopca_tipi seçeneklerini güncelleyin.",
+        "howToAddOption": (
+            "Yeni kategori ekleyin; bağlı alt_kategori / zincir_tipi / kopca_tipi seçeneklerini güncelleyin. "
+            "Üründe code saklanır (ör. YUZUK). Ana sayfa CategoryStrip için meta.showOnStorefront=true "
+            "ve isteğe bağlı meta.storefrontImageUrl ayarlayın."
+        ),
     },
     "alt_kategori": {
         "businessDomain": "Katalog",
         "usagePurpose": "Seçilen kategoriye göre alt kategori göstermek.",
-        "usedInApps": ["ops"],
+        "usedInApps": ["ops", "storefront"],
         "usedInScreens": ["Ürün oluşturma / düzenleme (PIM)"],
         "bindsToEntity": "ProductModel.sub_category",
-        "valueStrategy": "label",
+        "valueStrategy": "code",
         "parentFilter": True,
         "dynamicCapable": True,
         "criticalMeta": [],
         "integrationStatus": "wired",
-        "howToAddOption": "Seçenek eklerken üst tanım olarak ilgili kategoriyi seçin. Ürün formunda kategori seçilince filtrelenir.",
+        "howToAddOption": "Seçenek eklerken üst tanım olarak ilgili kategoriyi seçin. Ürün formunda kategori seçilince filtrelenir. Saklama: code.",
     },
     "metal_adi": {
         "businessDomain": "Katalog / Fiyatlandırma",
@@ -122,15 +130,19 @@ TABLE_USAGE: dict[str, dict[str, Any]] = {
     "metal_rengi": {
         "businessDomain": "Katalog",
         "usagePurpose": "Metal rengi seçimi; metal adına göre filtrelenir.",
-        "usedInApps": ["ops"],
-        "usedInScreens": ["Ürün oluşturma / düzenleme (PIM)", "Varyant yönetimi"],
+        "usedInApps": ["ops", "storefront"],
+        "usedInScreens": [
+            "Ürün oluşturma / düzenleme (PIM)",
+            "Varyant yönetimi",
+            "B2C / B2B StorefrontView renk filtresi",
+        ],
         "bindsToEntity": "ProductModel.metal_color / available_colors",
-        "valueStrategy": "label",
+        "valueStrategy": "code",
         "parentFilter": True,
         "dynamicCapable": True,
         "criticalMeta": [],
         "integrationStatus": "wired",
-        "howToAddOption": "Seçenek eklerken uygun metal adlarını üst tanım olarak bağlayın.",
+        "howToAddOption": "Seçenek eklerken uygun metal adlarını üst tanım olarak bağlayın. Üründe code saklanır (ör. BEYAZ, ROSE); vitrin label gösterir.",
     },
     "teknik_stil": {
         "businessDomain": "Katalog",

@@ -66,7 +66,10 @@ export function FeaturedAndNewSection({
   }, [activeTab, items, newArrivals, discountedItems]);
 
   const featuredBannerImage = useMemo(() => {
-    const firstRing = items.find((entry) => entry.product.category === 'Yüzük');
+    const firstRing = items.find((entry) => {
+      const c = entry.product.category;
+      return c === 'YUZUK' || c.toLocaleLowerCase('tr-TR') === 'yüzük';
+    });
     return firstRing?.media.mainUrl || featuredRingImg;
   }, [items]);
 

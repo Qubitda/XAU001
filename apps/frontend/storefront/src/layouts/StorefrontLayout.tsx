@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowUp,
@@ -45,6 +45,13 @@ import { B2cCartModal } from '@taragold/shared/features/commerce/components/B2cC
 import { StorefrontNotificationBell } from '@taragold/shared/features/storefront/components/StorefrontNotificationBell';
 import { hasB2bAccess, hasOpsAccess } from '@taragold/shared/components/PortalRouteGuard';
 import { isB2bPortalEnabled } from '@taragold/shared/config/commercialModules';
+import {
+  usePublicDefinitionOptions,
+} from '@taragold/shared/features/definitions/hooks/useDefinitionsQuery';
+import {
+  LEGACY_STOREFRONT_CATEGORY_CODES,
+  pickStorefrontCategories,
+} from '@taragold/shared/features/definitions/storefrontCategories';
 import {
   getB2bPanelUrl,
   getOpsLoginUrl,
@@ -129,6 +136,23 @@ export function StorefrontLayout() {
   const { setB2cCartOpen } = useCommerceUI();
   const b2cCartQuery = useB2cCartQuery();
   const favoritesQuery = useFavoritesQuery();
+  const kategoriDefs = usePublicDefinitionOptions('kategori');
+  const footerCategories = useMemo(() => {
+    const picked = pickStorefrontCategories(kategoriDefs.options);
+    if (picked.length > 0) return picked;
+    return LEGACY_STOREFRONT_CATEGORY_CODES.map((code) => ({
+      value: code,
+      label:
+        code === 'YUZUK'
+          ? 'Yüzük'
+          : code === 'KOLYE'
+            ? 'Kolye'
+            : code === 'KUPE'
+              ? 'Küpe'
+              : 'Bileklik',
+      code,
+    }));
+  }, [kategoriDefs.options]);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -745,42 +769,20 @@ export function StorefrontLayout() {
               </div>
             </div>
 
-            {/* Koleksiyonlar */}
+            {/* Kategoriler — OPS Tanımlar › kategori › showOnStorefront */}
             <div className="lg:col-span-2 space-y-3 text-xs">
-              <h3 className="text-[13px] font-semibold text-foreground">Koleksiyonlar</h3>
+              <h3 className="text-[13px] font-semibold text-foreground">Kategoriler</h3>
               <ul className="space-y-2 text-muted-foreground">
-                <li>
-                  <Link
-                    to="/koleksiyon?category=Y%C3%BCz%C3%BCk"
-                    className="hover:text-foreground transition-colors"
-                  >
-                    Yüzük
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/koleksiyon?category=Kolye"
-                    className="hover:text-foreground transition-colors"
-                  >
-                    Kolye
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/koleksiyon?category=K%C3%BCpe"
-                    className="hover:text-foreground transition-colors"
-                  >
-                    Küpe
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/koleksiyon?category=Bileklik"
-                    className="hover:text-foreground transition-colors"
-                  >
-                    Bileklik
-                  </Link>
-                </li>
+                {footerCategories.map((cat) => (
+                  <li key={cat.code}>
+                    <Link
+                      to={`/koleksiyon?category=${encodeURIComponent(cat.value)}`}
+                      className="hover:text-foreground transition-colors"
+                    >
+                      {cat.label}
+                    </Link>
+                  </li>
+                ))}
               </ul>
             </div>
 

@@ -2,12 +2,24 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getActiveSalesChannels } from '../../../constants/salesChannels';
 import { isSalesChannelEnabled } from '../../../config/commercialModules';
-import { definitionsService } from '../services/definitionsService';
+import {
+  STOREFRONT_DEFINITION_TABLES,
+  definitionsService,
+} from '../services/definitionsService';
 import type { DefinitionItem, DefinitionTable } from '../types';
 
 export const definitionsQueryKeys = {
   all: ['definitions'] as const,
+  public: ['definitions', 'public'] as const,
 };
+
+/** Tables that persist product field values as definition codes (not display labels). */
+const CODE_STRATEGY_TABLES = new Set([
+  'ayar_kodu',
+  'kategori',
+  'alt_kategori',
+  'metal_rengi',
+]);
 
 export type DefinitionOption = {
   value: string;
@@ -22,7 +34,7 @@ export type DefinitionOption = {
 function valueStrategyFor(table: DefinitionTable | undefined, tableCode: string): string {
   if (table?.usage?.valueStrategy) return table.usage.valueStrategy;
   // Legacy fallback only when usage catalog not yet loaded.
-  return tableCode === 'ayar_kodu' ? 'code' : 'label';
+  return CODE_STRATEGY_TABLES.has(tableCode) ? 'code' : 'label';
 }
 
 function toOption(table: DefinitionTable | undefined, tableCode: string, item: DefinitionItem): DefinitionOption {
@@ -53,6 +65,62 @@ export function filterOptionsByParent(
   return options.filter((o) => matchesParent(o, value));
 }
 
+/** All aliases for a definition option (value + code + label). */
+export function definitionAliases(option: Pick<DefinitionOption, 'value' | 'code' | 'label'>): string[] {
+  return Array.from(
+    new Set([option.value, option.code, option.label].map((s) => s.trim()).filter(Boolean))
+  );
+}
+
+export function findDefinitionOption(
+  options: DefinitionOption[],
+  storedOrFilter: string
+): DefinitionOption | undefined {
+  const needle = (storedOrFilter || '').trim();
+  if (!needle) return undefined;
+  return options.find((o) => definitionAliases(o).includes(needle));
+}
+
+/**
+ * Match a stored product field (code or legacy label) against a filter value
+ * (option.value / code / label). Bridges pre-code-strategy catalog rows.
+ */
+export function matchesDefinitionValue(
+  stored: string,
+  filterValue: string,
+  options: DefinitionOption[] = []
+): boolean {
+  const s = (stored || '').trim();
+  const f = (filterValue || '').trim();
+  if (!s || !f) return false;
+  if (s === f) return true;
+  if (options.length === 0) {
+    return s.toLocaleLowerCase('tr-TR') === f.toLocaleLowerCase('tr-TR');
+  }
+  const filterOpt = findDefinitionOption(options, f);
+  if (filterOpt) return definitionAliases(filterOpt).includes(s);
+  const storedOpt = findDefinitionOption(options, s);
+  if (storedOpt) return definitionAliases(storedOpt).includes(f);
+  return s.toLocaleLowerCase('tr-TR') === f.toLocaleLowerCase('tr-TR');
+}
+
+export function resolveDefinitionLabel(
+  stored: string,
+  options: DefinitionOption[]
+): string {
+  const s = (stored || '').trim();
+  if (!s) return '';
+  return findDefinitionOption(options, s)?.label ?? s;
+}
+
+/** Ring category detection for size guides / media (code or legacy label). */
+export function isRingCategory(stored: string): boolean {
+  const s = (stored || '').trim();
+  if (!s) return false;
+  if (s === 'YUZUK') return true;
+  return s.toLocaleLowerCase('tr-TR') === 'yüzük';
+}
+
 export function useDefinitionsQuery(enabled = true) {
   return useQuery({
     queryKey: definitionsQueryKeys.all,
@@ -62,9 +130,20 @@ export function useDefinitionsQuery(enabled = true) {
   });
 }
 
-export function useDefinitionOptions(tableCode: string, enabled = true) {
-  const query = useDefinitionsQuery(enabled);
+/** Public (unauthenticated) definitions for B2C/B2B storefront nav & filters. */
+export function usePublicDefinitionsQuery(enabled = true) {
+  return useQuery({
+    queryKey: definitionsQueryKeys.public,
+    queryFn: () => definitionsService.listPublic(STOREFRONT_DEFINITION_TABLES),
+    enabled,
+    staleTime: 60_000,
+  });
+}
 
+function useOptionsFromQuery(
+  query: ReturnType<typeof useDefinitionsQuery>,
+  tableCode: string
+) {
   const table = useMemo(
     () => query.data?.tables.find((t) => t.code === tableCode),
     [query.data, tableCode]
@@ -85,6 +164,14 @@ export function useDefinitionOptions(tableCode: string, enabled = true) {
     items,
     options,
   };
+}
+
+export function useDefinitionOptions(tableCode: string, enabled = true) {
+  return useOptionsFromQuery(useDefinitionsQuery(enabled), tableCode);
+}
+
+export function usePublicDefinitionOptions(tableCode: string, enabled = true) {
+  return useOptionsFromQuery(usePublicDefinitionsQuery(enabled), tableCode);
 }
 
 /** Build purity → fineness map from ayar_kodu definition meta (SSOT). */

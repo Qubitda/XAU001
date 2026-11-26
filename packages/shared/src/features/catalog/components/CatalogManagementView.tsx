@@ -44,8 +44,12 @@ import {
 } from '../hooks/useCatalogQueries';
 import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
 import type { ProductState } from '../types';
-
-const CATEGORY_OPTIONS = ['Tümü', 'Yüzük', 'Kolye', 'Bileklik', 'Küpe'] as const;
+import {
+  matchesDefinitionValue,
+  resolveDefinitionLabel,
+  useDefinitionOptions,
+} from '../../definitions/hooks/useDefinitionsQuery';
+import { LEGACY_STOREFRONT_CATEGORY_CODES } from '../../definitions/storefrontCategories';
 
 export function CatalogManagementView() {
   const navigate = useNavigate();
@@ -53,6 +57,31 @@ export function CatalogManagementView() {
   const { setSelectedParentSku } = usePortalSelection();
   const updateProductMutation = useUpdateProductMutation();
   const deleteProductMutation = useDeleteProductMutation();
+  const categoryDefs = useDefinitionOptions('kategori');
+
+  const categoryTabs = useMemo(() => {
+    // OPS katalog: tüm aktif kategoriler (tanım SSOT). Fallback yalnızca API yokken.
+    const opts =
+      categoryDefs.options.length > 0
+        ? categoryDefs.options
+        : LEGACY_STOREFRONT_CATEGORY_CODES.map((code) => ({
+            value: code,
+            label:
+              code === 'YUZUK'
+                ? 'Yüzük'
+                : code === 'KOLYE'
+                  ? 'Kolye'
+                  : code === 'KUPE'
+                    ? 'Küpe'
+                    : 'Bileklik',
+            code,
+            id: code,
+            meta: {},
+            parentCodes: [] as string[],
+            parentLabels: [] as string[],
+          }));
+    return [{ value: 'Tümü', label: 'Tümü' }, ...opts];
+  }, [categoryDefs.options]);
 
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tümü');
@@ -65,9 +94,15 @@ export function CatalogManagementView() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr-TR');
+    const matchOpts = categoryTabs.filter((t) => t.value !== 'Tümü');
     return products
       .filter((p) => {
-        if (categoryFilter !== 'Tümü' && p.category !== categoryFilter) return false;
+        if (
+          categoryFilter !== 'Tümü' &&
+          !matchesDefinitionValue(p.category, categoryFilter, matchOpts)
+        ) {
+          return false;
+        }
         if (!q) return true;
         return (
           p.parentSku.toLowerCase().includes(q) ||
@@ -80,8 +115,9 @@ export function CatalogManagementView() {
         product,
         metrics: computeJewelryMetrics(product, rates),
         thumbUrl: resolveProductThumbnail(product),
+        categoryLabel: resolveDefinitionLabel(product.category, matchOpts) || product.category,
       }));
-  }, [products, rates, query, categoryFilter]);
+  }, [products, rates, query, categoryFilter, categoryTabs]);
 
   const handleConfirmDelete = async () => {
     if (!deletingProduct) return;
@@ -134,9 +170,9 @@ export function CatalogManagementView() {
 
               <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
                 <TabsList className="h-9">
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <TabsTrigger key={cat} value={cat} className="text-xs px-3">
-                      {cat}
+                  {categoryTabs.map((cat) => (
+                    <TabsTrigger key={cat.value} value={cat.value} className="text-xs px-3">
+                      {cat.label}
                     </TabsTrigger>
                   ))}
                 </TabsList>
@@ -158,7 +194,7 @@ export function CatalogManagementView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ product, metrics, thumbUrl }) => (
+                {rows.map(({ product, metrics, thumbUrl, categoryLabel }) => (
                   <TableRow key={product.parentSku}>
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -171,7 +207,7 @@ export function CatalogManagementView() {
                         <div>
                           <div className="font-medium text-foreground">{product.title}</div>
                           <div className="font-mono text-[11px] text-muted-foreground">
-                            {product.parentSku} · {product.category} ·{' '}
+                            {product.parentSku} · {categoryLabel} ·{' '}
                             {product.certificateAgency || 'Sertifikasız'}
                           </div>
                         </div>

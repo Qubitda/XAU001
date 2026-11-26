@@ -123,13 +123,16 @@ export function ProductCardView({
   });
 
   const dealerCustomerPriceTry = computed.finalB2bPriceTry * (1 + dealerMarkupPct / 100);
-  const isRing = product.category === 'Yüzük';
+  const categoryKey = product.category.trim().toLocaleUpperCase('tr-TR');
+  const isRing =
+    product.category === 'YUZUK' ||
+    product.category.toLocaleLowerCase('tr-TR') === 'yüzük';
   const sizeUnitLabel =
-    product.category === 'Kolye'
+    categoryKey === 'KOLYE' || product.category === 'Kolye'
       ? 'Zincir Boyu'
-      : product.category === 'Bileklik'
+      : categoryKey === 'BILEKLIK' || product.category === 'Bileklik'
         ? 'Bileklik Boyu'
-        : product.category === 'Küpe'
+        : categoryKey === 'KUPE' || product.category === 'Küpe'
           ? 'Çap / Boy'
           : 'Yüzük Ölçüsü';
 

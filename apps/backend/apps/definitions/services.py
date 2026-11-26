@@ -42,6 +42,15 @@ __all__ = [
 
 PROTECTED_META_KEYS: frozenset[str] = frozenset({"fineness"})
 
+# Operator-managed keys preserved across system seed refresh (unless reset deletes the row).
+OPERATOR_META_KEYS: frozenset[str] = frozenset(
+    {
+        "showOnStorefront",
+        "storefrontImageUrl",
+        "storefrontImageAlt",
+    }
+)
+
 
 def normalize_item_code(raw: str) -> str:
     return (raw or "").strip().upper().replace(" ", "_")
@@ -282,12 +291,18 @@ def seed_definition_tables(*, reset_system_items: bool = False) -> dict[str, int
     items_by_key: dict[tuple[str, str], DefinitionItem] = {}
     for table_code, item_code, label, meta, item_sort, _parents in DEFINITION_ITEMS:
         table = tables_by_code[table_code]
+        existing = DefinitionItem.objects.filter(table=table, code=item_code).first()
+        merged_meta = dict(meta or {})
+        if existing and isinstance(existing.meta, dict):
+            for key in OPERATOR_META_KEYS:
+                if key in existing.meta:
+                    merged_meta[key] = existing.meta[key]
         item, _ = DefinitionItem.objects.update_or_create(
             table=table,
             code=item_code,
             defaults={
                 "label": label,
-                "meta": meta or {},
+                "meta": merged_meta,
                 "sort_order": item_sort,
                 "is_active": True,
                 "is_system": True,

@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
-import heroNecklaceModelImg from '../../../assets/images/kl022_necklace_model_1795533194072.jpg';
-import heroRingHandImg from '../../../assets/images/se009_white_hand_1795533193888.jpg';
-import heroAtelierImg from '../../../assets/images/hero_diamond_atelier_1795551170432.jpg';
+
+import timeless1920 from '../../../assets/images/hero/hero-timeless-elegance-1920.jpg';
+import timeless2560 from '../../../assets/images/hero/hero-timeless-elegance-2560.jpg';
+import arrivals1920 from '../../../assets/images/hero/hero-new-arrivals-1920.jpg';
+import arrivals2560 from '../../../assets/images/hero/hero-new-arrivals-2560.jpg';
+import atelier1920 from '../../../assets/images/hero/hero-atelier-craft-1920.jpg';
+import atelier2560 from '../../../assets/images/hero/hero-atelier-craft-2560.jpg';
 
 export interface HeroCampaignSlide {
   id: string;
@@ -12,7 +16,11 @@ export interface HeroCampaignSlide {
   subtitle: string;
   ctaLabel: string;
   ctaHref: string;
+  /** Default/fallback URL (prefer the largest asset). */
   imageUrl: string;
+  /** Responsive candidates, e.g. `url 1920w, url 2560w`. */
+  imageSrcSet: string;
+  imageSizes?: string;
   imageAlt: string;
   imagePositionClass: string;
 }
@@ -25,7 +33,9 @@ export const DEFAULT_HERO_SLIDES: HeroCampaignSlide[] = [
     subtitle: 'Her anınıza eşlik eden özel tasarımlar.',
     ctaLabel: 'Koleksiyonu Keşfet',
     ctaHref: '/koleksiyon',
-    imageUrl: heroNecklaceModelImg,
+    imageUrl: timeless2560,
+    imageSrcSet: `${timeless1920} 1920w, ${timeless2560} 2560w`,
+    imageSizes: '100vw',
     imageAlt: 'TARA DIAMOND sertifikalı pırlanta mücevher kampanyası',
     imagePositionClass: 'object-[68%_22%] sm:object-[72%_25%]',
   },
@@ -36,7 +46,9 @@ export const DEFAULT_HERO_SLIDES: HeroCampaignSlide[] = [
     subtitle: 'GIA ve HRD sertifikalı yeni sezon pırlanta yüzükler.',
     ctaLabel: 'Yeni Gelenleri İncele',
     ctaHref: '/koleksiyon?filter=new_collection',
-    imageUrl: heroRingHandImg,
+    imageUrl: arrivals2560,
+    imageSrcSet: `${arrivals1920} 1920w, ${arrivals2560} 2560w`,
+    imageSizes: '100vw',
     imageAlt: 'TARA DIAMOND pırlanta tektaş yüzük yeni sezon koleksiyonu',
     imagePositionClass: 'object-[62%_center] sm:object-[66%_center]',
   },
@@ -47,7 +59,9 @@ export const DEFAULT_HERO_SLIDES: HeroCampaignSlide[] = [
     subtitle: 'El işçiliği altın montürler ve sigortalı özel teslimat.',
     ctaLabel: 'Kampanyaları Gör',
     ctaHref: '/koleksiyon?filter=discounted',
-    imageUrl: heroAtelierImg,
+    imageUrl: atelier2560,
+    imageSrcSet: `${atelier1920} 1920w, ${atelier2560} 2560w`,
+    imageSizes: '100vw',
     imageAlt: 'TARA DIAMOND traverten üzerinde tektaş yüzük ve suyolu bileklik',
     imagePositionClass: 'object-[60%_65%] sm:object-[65%_65%]',
   },
@@ -98,10 +112,12 @@ export function HeroBannerSlider({
       className="relative w-full overflow-hidden bg-muted border-b border-border"
     >
       <div className="relative min-h-[470px] sm:min-h-[500px] lg:min-h-[560px] xl:min-h-[600px] flex items-center">
-        {/* Background Campaign Image */}
+        {/* Background Campaign Image — 1920/2560 srcset, no build-time recompress */}
         <img
           key={activeSlide.id}
           src={activeSlide.imageUrl}
+          srcSet={activeSlide.imageSrcSet}
+          sizes={activeSlide.imageSizes ?? '100vw'}
           alt={activeSlide.imageAlt}
           fetchPriority="high"
           decoding="async"

@@ -95,6 +95,10 @@ type ItemFormState = {
   isActive: boolean;
   parentIds: string[];
   metaJson: string;
+  /** kategori → B2C CategoryStrip */
+  showOnStorefront: boolean;
+  storefrontImageUrl: string;
+  storefrontImageAlt: string;
 };
 
 const emptyForm = (): ItemFormState => ({
@@ -104,7 +108,24 @@ const emptyForm = (): ItemFormState => ({
   isActive: true,
   parentIds: [],
   metaJson: '',
+  showOnStorefront: false,
+  storefrontImageUrl: '',
+  storefrontImageAlt: '',
 });
+
+function readMetaBool(meta: Record<string, unknown>, key: string, fallback = false): boolean {
+  if (!(key in meta)) return fallback;
+  const v = meta[key];
+  if (typeof v === 'boolean') return v;
+  if (v === 1 || v === '1' || v === 'true') return true;
+  if (v === 0 || v === '0' || v === 'false') return false;
+  return fallback;
+}
+
+function readMetaString(meta: Record<string, unknown>, key: string): string {
+  const v = meta[key];
+  return typeof v === 'string' ? v : '';
+}
 
 function countActive(items: DefinitionItem[] | undefined) {
   return (items ?? []).filter((i) => i.isActive).length;
@@ -152,6 +173,7 @@ export function OpsDefinitionsPage() {
   const [showAdvancedMeta, setShowAdvancedMeta] = useState(false);
   const [form, setForm] = useState<ItemFormState>(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,7 +254,8 @@ export function OpsDefinitionsPage() {
     setDialogMode('edit');
     setEditingItemId(item.id);
     setEditingIsSystem(item.isSystem);
-    const hasMeta = item.meta && Object.keys(item.meta).length > 0;
+    const meta = item.meta ?? {};
+    const hasMeta = Object.keys(meta).length > 0;
     setShowAdvancedMeta(Boolean(hasMeta));
     setForm({
       code: item.code,
@@ -240,9 +263,33 @@ export function OpsDefinitionsPage() {
       sortOrder: item.sortOrder,
       isActive: item.isActive,
       parentIds: item.parentIds ?? [],
-      metaJson: hasMeta ? JSON.stringify(item.meta, null, 2) : '',
+      metaJson: hasMeta ? JSON.stringify(meta, null, 2) : '',
+      showOnStorefront: readMetaBool(meta, 'showOnStorefront', false),
+      storefrontImageUrl: readMetaString(meta, 'storefrontImageUrl'),
+      storefrontImageAlt: readMetaString(meta, 'storefrontImageAlt'),
     });
     setDialogOpen(true);
+  };
+
+  const onUploadStorefrontImage = async (file: File | undefined) => {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await apiFetch<{ url: string }>('/api/v1/ops/definitions/media', {
+        method: 'POST',
+        body: fd,
+      });
+      const url = res.data?.url ?? '';
+      if (!url) throw new Error('Yükleme yanıtı boş');
+      setForm((p) => ({ ...p, storefrontImageUrl: url }));
+      toast.success('Görsel yüklendi');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Görsel yüklenemedi');
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const toggleParent = (id: string) => {
@@ -294,12 +341,28 @@ export function OpsDefinitionsPage() {
       return;
     }
 
-    let meta: Record<string, unknown> | undefined;
+    let meta: Record<string, unknown> = {};
     try {
-      if (showAdvancedMeta) meta = parseMeta();
+      if (showAdvancedMeta) {
+        meta = parseMeta() ?? {};
+      } else if (editingItemId && selectedTable) {
+        const existing = selectedTable.items?.find((i) => i.id === editingItemId);
+        meta = { ...(existing?.meta ?? {}) };
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Meta geçersiz');
       return;
+    }
+
+    if (selectedTable.code === 'kategori') {
+      meta = {
+        ...meta,
+        showOnStorefront: form.showOnStorefront,
+        storefrontImageUrl: form.storefrontImageUrl.trim(),
+        storefrontImageAlt: form.storefrontImageAlt.trim(),
+      };
+      if (!meta.storefrontImageUrl) delete meta.storefrontImageUrl;
+      if (!meta.storefrontImageAlt) delete meta.storefrontImageAlt;
     }
 
     setSaving(true);
@@ -314,7 +377,7 @@ export function OpsDefinitionsPage() {
       if (!(dialogMode === 'edit' && editingIsSystem)) {
         body.code = form.code.trim();
       }
-      if (showAdvancedMeta && meta !== undefined) {
+      if (selectedTable.code === 'kategori' || showAdvancedMeta) {
         body.meta = meta;
       }
 
@@ -674,6 +737,9 @@ export function OpsDefinitionsPage() {
                     <TableHead>Teknik kod</TableHead>
                     <TableHead>Üst tanım</TableHead>
                     <TableHead className="w-16">Sıra</TableHead>
+                    {selectedTable?.code === 'kategori' ? (
+                      <TableHead>Web vitrin</TableHead>
+                    ) : null}
                     <TableHead>Durum</TableHead>
                     <TableHead className="text-right">İşlem</TableHead>
                   </TableRow>
@@ -681,14 +747,20 @@ export function OpsDefinitionsPage() {
                 <TableBody>
                   {loading && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-10">
+                      <TableCell
+                        colSpan={selectedTable?.code === 'kategori' ? 7 : 6}
+                        className="text-center text-xs text-muted-foreground py-10"
+                      >
                         Yükleniyor…
                       </TableCell>
                     </TableRow>
                   )}
                   {!loading && filteredItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-xs text-muted-foreground py-10">
+                      <TableCell
+                        colSpan={selectedTable?.code === 'kategori' ? 7 : 6}
+                        className="text-center text-xs text-muted-foreground py-10"
+                      >
                         Bu grupta henüz seçenek yok. “Seçenek ekle” ile başlayın.
                       </TableCell>
                     </TableRow>
@@ -703,6 +775,31 @@ export function OpsDefinitionsPage() {
                           : '—'}
                       </TableCell>
                       <TableCell className="text-xs tabular-nums">{item.sortOrder}</TableCell>
+                      {selectedTable?.code === 'kategori' ? (
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {readMetaString(item.meta ?? {}, 'storefrontImageUrl') ? (
+                              <img
+                                src={readMetaString(item.meta ?? {}, 'storefrontImageUrl')}
+                                alt=""
+                                className="h-8 w-10 rounded object-cover border border-border bg-muted shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : null}
+                            <Badge
+                              variant={
+                                readMetaBool(item.meta ?? {}, 'showOnStorefront', false)
+                                  ? 'secondary'
+                                  : 'outline'
+                              }
+                            >
+                              {readMetaBool(item.meta ?? {}, 'showOnStorefront', false)
+                                ? 'Göster'
+                                : 'Gizle'}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                      ) : null}
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           <Badge variant={item.isActive ? 'secondary' : 'outline'}>
@@ -743,7 +840,7 @@ export function OpsDefinitionsPage() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className={selectedTable?.code === 'kategori' ? 'sm:max-w-xl' : 'sm:max-w-lg'}>
           <DialogHeader>
             <DialogTitle>
               {dialogMode === 'create' ? 'Yeni seçenek' : 'Seçeneği düzenle'}
@@ -843,6 +940,96 @@ export function OpsDefinitionsPage() {
                       Üst grupta aktif seçenek yok. Önce {selectedTable.parentTableName} ekleyin.
                     </span>
                   )}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedTable?.code === 'kategori' ? (
+              <div className="rounded-md border border-border p-3 space-y-3 bg-muted/30">
+                <div>
+                  <p className="text-[11px] font-medium text-foreground">Ana sayfa CategoryStrip</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Web vitrinde kategori kartı olarak gösterilsin mi ve hangi görsel kullanılsın.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Web&apos;de göster</Label>
+                  <Select
+                    value={form.showOnStorefront ? 'yes' : 'no'}
+                    onValueChange={(v) =>
+                      setForm((p) => ({ ...p, showOnStorefront: v === 'yes' }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Göster</SelectItem>
+                      <SelectItem value="no">Gösterme</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Kart görseli URL</Label>
+                  <Input
+                    value={form.storefrontImageUrl}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, storefrontImageUrl: e.target.value }))
+                    }
+                    placeholder="https://… veya /media/…"
+                  />
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <label
+                      className={`inline-flex h-8 items-center px-3 rounded-md border border-input bg-background text-xs font-medium cursor-pointer hover:bg-muted ${
+                        uploadingImage ? 'opacity-60 pointer-events-none' : ''
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="sr-only"
+                        disabled={uploadingImage}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          void onUploadStorefrontImage(file);
+                          e.target.value = '';
+                        }}
+                      />
+                      {uploadingImage ? 'Yükleniyor…' : 'Dosya yükle'}
+                    </label>
+                    {form.storefrontImageUrl ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setForm((p) => ({ ...p, storefrontImageUrl: '' }))}
+                      >
+                        Görseli temizle
+                      </Button>
+                    ) : null}
+                  </div>
+                  {form.storefrontImageUrl ? (
+                    <img
+                      src={form.storefrontImageUrl}
+                      alt=""
+                      className="mt-2 h-20 w-28 rounded-md object-cover border border-border bg-muted"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Boş bırakılırsa ürün görseli veya varsayılan stüdyo görseli kullanılır.
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Görsel alt metni (opsiyonel)</Label>
+                  <Input
+                    value={form.storefrontImageAlt}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, storefrontImageAlt: e.target.value }))
+                    }
+                    placeholder="Örn. TARA DIAMOND pırlanta yüzük kategorisi"
+                  />
                 </div>
               </div>
             ) : null}
