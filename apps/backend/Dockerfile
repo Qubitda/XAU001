@@ -28,7 +28,6 @@ USER app
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=5 \
-  CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+# Healthcheck lives in docker-compose for `web` only — celery images share this Dockerfile.
 
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "60"]

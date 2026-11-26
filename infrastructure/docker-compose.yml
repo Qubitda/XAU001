@@ -81,6 +81,9 @@ services:
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
     command: celery -A config worker -l info --concurrency=2
+    healthcheck:
+      disable: true
+    restart: unless-stopped
     volumes:
       - media_data:/app/media
     depends_on:
@@ -106,7 +109,10 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
-    command: celery -A config beat -l info
+    command: celery -A config beat -l info -s /tmp/celerybeat-schedule
+    healthcheck:
+      disable: true
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
