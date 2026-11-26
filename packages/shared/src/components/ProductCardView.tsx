@@ -29,7 +29,7 @@ import {
   formatTrNumber,
   PURITY_MAP,
 } from '../utils/pricingEngine';
-import { resolveProductMedia } from '../data/productMedia';
+import { canonicalizeMetalColor, resolveProductMedia } from '../data/productMedia';
 import { SizeGuideDialog } from '../features/commerce/components/SizeGuideDialog';
 import { RingShowcase } from './RingShowcase';
 import {
@@ -624,7 +624,7 @@ export function ProductCardView({
                 <span className={`font-medium ${isB2c ? 'text-muted-foreground' : 'text-foreground'}`}>
                   Metal Rengi:{' '}
                   <span className={isB2c ? 'text-foreground' : 'text-foreground'}>
-                    {product.metalColor} Altın
+                    {canonicalizeMetalColor(product.metalColor)} Altın
                   </span>
                 </span>
               </div>
@@ -636,7 +636,8 @@ export function ProductCardView({
                       : color === 'Sarı'
                         ? 'bg-gradient-to-br from-[#F4DF9B] to-[#C89D3C]'
                         : 'bg-gradient-to-br from-[#F1C7B8] to-[#BF7E68]';
-                  const active = product.metalColor === color;
+                  const active =
+                    canonicalizeMetalColor(product.metalColor) === canonicalizeMetalColor(color);
                   return (
                     <button
                       key={color}
@@ -707,24 +708,30 @@ export function ProductCardView({
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {[0.3, 0.5, 0.9].map((centerCt) => {
-                  const totalCt = (centerCt + product.sideStoneCarat).toFixed(2);
-                  const active = product.centerStoneCarat === centerCt;
-                  return (
-                    <button
-                      key={centerCt}
-                      type="button"
-                      onClick={() => handleCaratSelect(centerCt)}
-                      className={`min-h-[40px] px-3.5 py-2 text-xs font-mono font-medium rounded-[4px] border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                        active
-                          ? 'border-foreground bg-primary text-primary-foreground'
-                          : 'border-input bg-background text-foreground hover:border-ring'
-                      }`}
-                    >
-                      {totalCt} ct
-                    </button>
-                  );
-                })}
+                {Array.from(
+                  new Set(
+                    [0.3, 0.5, 0.9, Number(product.centerStoneCarat) || 0].filter((v) => v > 0)
+                  )
+                )
+                  .sort((a, b) => a - b)
+                  .map((centerCt) => {
+                    const totalCt = (centerCt + product.sideStoneCarat).toFixed(2);
+                    const active = Math.abs(product.centerStoneCarat - centerCt) < 0.001;
+                    return (
+                      <button
+                        key={centerCt}
+                        type="button"
+                        onClick={() => handleCaratSelect(centerCt)}
+                        className={`min-h-[40px] px-3.5 py-2 text-xs font-mono font-medium rounded-[4px] border transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                          active
+                            ? 'border-foreground bg-primary text-primary-foreground'
+                            : 'border-input bg-background text-foreground hover:border-ring'
+                        }`}
+                      >
+                        {totalCt} ct
+                      </button>
+                    );
+                  })}
               </div>
             </div>
 

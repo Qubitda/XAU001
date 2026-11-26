@@ -108,7 +108,7 @@ const MEDIA_REGISTRY: Record<
 };
 
 /** Canonical media-registry keys for metal_rengi codes + legacy labels. */
-function canonicalizeMetalColor(color: string): MetalColor {
+export function canonicalizeMetalColor(color: string): MetalColor {
   const raw = (color || '').trim();
   const upper = raw.toLocaleUpperCase('tr-TR');
   if (upper === 'BEYAZ' || raw === 'Beyaz') return 'Beyaz';

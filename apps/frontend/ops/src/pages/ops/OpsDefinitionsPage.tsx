@@ -283,7 +283,7 @@ export function OpsDefinitionsPage() {
       });
       const url = res.data?.url ?? '';
       if (!url) throw new Error('Yükleme yanıtı boş');
-      setForm((p) => ({ ...p, storefrontImageUrl: url }));
+      patchKategoriForm({ storefrontImageUrl: url });
       toast.success('Görsel yüklendi');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Görsel yüklenemedi');
@@ -316,11 +316,11 @@ export function OpsDefinitionsPage() {
     }
   };
 
-  const parseMeta = (): Record<string, unknown> | undefined => {
-    const raw = form.metaJson.trim();
-    if (!raw) return undefined;
+  const parseMeta = (raw = form.metaJson): Record<string, unknown> | undefined => {
+    const text = raw.trim();
+    if (!text) return undefined;
     try {
-      const parsed = JSON.parse(raw) as unknown;
+      const parsed = JSON.parse(text) as unknown;
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Meta bir nesne olmalıdır');
       }
@@ -328,6 +328,56 @@ export function OpsDefinitionsPage() {
     } catch (e) {
       throw new Error(e instanceof Error ? e.message : 'Meta JSON geçersiz');
     }
+  };
+
+  /** Keep kategori Web-vitrin controls ↔ advanced JSON in sync. */
+  const applyMetaJsonToForm = (raw: string) => {
+    setForm((prev) => {
+      let next: ItemFormState = { ...prev, metaJson: raw };
+      try {
+        const parsed = parseMeta(raw);
+        if (!parsed) return next;
+        if ('showOnStorefront' in parsed) {
+          next = {
+            ...next,
+            showOnStorefront: readMetaBool(parsed, 'showOnStorefront', prev.showOnStorefront),
+          };
+        }
+        if ('storefrontImageUrl' in parsed) {
+          next = { ...next, storefrontImageUrl: readMetaString(parsed, 'storefrontImageUrl') };
+        }
+        if ('storefrontImageAlt' in parsed) {
+          next = { ...next, storefrontImageAlt: readMetaString(parsed, 'storefrontImageAlt') };
+        }
+      } catch {
+        /* keep typing invalid JSON */
+      }
+      return next;
+    });
+  };
+
+  const patchKategoriForm = (patch: Partial<ItemFormState>) => {
+    setForm((prev) => {
+      const next = { ...prev, ...patch };
+      if (selectedTable?.code !== 'kategori') return next;
+      let baseMeta: Record<string, unknown> = {};
+      try {
+        baseMeta = parseMeta(prev.metaJson) ?? {};
+      } catch {
+        baseMeta = {};
+      }
+      const merged: Record<string, unknown> = {
+        ...baseMeta,
+        showOnStorefront: next.showOnStorefront,
+      };
+      const url = next.storefrontImageUrl.trim();
+      const alt = next.storefrontImageAlt.trim();
+      if (url) merged.storefrontImageUrl = url;
+      else delete merged.storefrontImageUrl;
+      if (alt) merged.storefrontImageAlt = alt;
+      else delete merged.storefrontImageAlt;
+      return { ...next, metaJson: JSON.stringify(merged, null, 2) };
+    });
   };
 
   const onSave = async () => {
@@ -355,11 +405,25 @@ export function OpsDefinitionsPage() {
     }
 
     if (selectedTable.code === 'kategori') {
+      // Prefer advanced JSON when that editor is open and the key is present;
+      // otherwise use the dedicated Web-vitrin controls (they stay in sync while typing).
+      const showOn =
+        showAdvancedMeta && 'showOnStorefront' in meta
+          ? readMetaBool(meta, 'showOnStorefront', form.showOnStorefront)
+          : form.showOnStorefront;
+      const imageUrl =
+        showAdvancedMeta && typeof meta.storefrontImageUrl === 'string'
+          ? meta.storefrontImageUrl.trim()
+          : form.storefrontImageUrl.trim();
+      const imageAlt =
+        showAdvancedMeta && typeof meta.storefrontImageAlt === 'string'
+          ? meta.storefrontImageAlt.trim()
+          : form.storefrontImageAlt.trim();
       meta = {
         ...meta,
-        showOnStorefront: form.showOnStorefront,
-        storefrontImageUrl: form.storefrontImageUrl.trim(),
-        storefrontImageAlt: form.storefrontImageAlt.trim(),
+        showOnStorefront: showOn,
+        storefrontImageUrl: imageUrl,
+        storefrontImageAlt: imageAlt,
       };
       if (!meta.storefrontImageUrl) delete meta.storefrontImageUrl;
       if (!meta.storefrontImageAlt) delete meta.storefrontImageAlt;
@@ -956,9 +1020,7 @@ export function OpsDefinitionsPage() {
                   <Label className="text-[11px]">Web&apos;de göster</Label>
                   <Select
                     value={form.showOnStorefront ? 'yes' : 'no'}
-                    onValueChange={(v) =>
-                      setForm((p) => ({ ...p, showOnStorefront: v === 'yes' }))
-                    }
+                    onValueChange={(v) => patchKategoriForm({ showOnStorefront: v === 'yes' })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -973,9 +1035,7 @@ export function OpsDefinitionsPage() {
                   <Label className="text-[11px]">Kart görseli URL</Label>
                   <Input
                     value={form.storefrontImageUrl}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, storefrontImageUrl: e.target.value }))
-                    }
+                    onChange={(e) => patchKategoriForm({ storefrontImageUrl: e.target.value })}
                     placeholder="https://… veya /media/…"
                   />
                   <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -1002,7 +1062,7 @@ export function OpsDefinitionsPage() {
                         type="button"
                         size="sm"
                         variant="ghost"
-                        onClick={() => setForm((p) => ({ ...p, storefrontImageUrl: '' }))}
+                        onClick={() => patchKategoriForm({ storefrontImageUrl: '' })}
                       >
                         Görseli temizle
                       </Button>
@@ -1025,9 +1085,7 @@ export function OpsDefinitionsPage() {
                   <Label className="text-[11px]">Görsel alt metni (opsiyonel)</Label>
                   <Input
                     value={form.storefrontImageAlt}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, storefrontImageAlt: e.target.value }))
-                    }
+                    onChange={(e) => patchKategoriForm({ storefrontImageAlt: e.target.value })}
                     placeholder="Örn. TARA DIAMOND pırlanta yüzük kategorisi"
                   />
                 </div>
@@ -1048,10 +1106,23 @@ export function OpsDefinitionsPage() {
                   <p className="text-[10px] text-muted-foreground">
                     Yalnızca teknik ihtiyaçlarda kullanın. Sistem tanımlarında{' '}
                     <code className="font-mono">fineness</code> gibi hesaplama alanları korunur.
+                    {selectedTable?.code === 'kategori' ? (
+                      <>
+                        {' '}
+                        <code className="font-mono">showOnStorefront</code> / görsel alanları yukarıdaki
+                        Web vitrin kontrolleriyle senkron tutulur.
+                      </>
+                    ) : null}
                   </p>
                   <textarea
                     value={form.metaJson}
-                    onChange={(e) => setForm((p) => ({ ...p, metaJson: e.target.value }))}
+                    onChange={(e) => {
+                      if (selectedTable?.code === 'kategori') {
+                        applyMetaJsonToForm(e.target.value);
+                      } else {
+                        setForm((p) => ({ ...p, metaJson: e.target.value }));
+                      }
+                    }}
                     rows={5}
                     placeholder='{"fineness": 0.585}'
                     className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"

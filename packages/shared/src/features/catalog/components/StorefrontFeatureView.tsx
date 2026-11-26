@@ -7,7 +7,6 @@ import { useAuth } from '../../../providers/AuthProvider';
 import {
   useActiveProductMetrics,
   usePortalSelection,
-  useUpdateProductMutation,
 } from '../hooks/useCatalogQueries';
 import type { MetalColor } from '../types';
 import {
@@ -33,7 +32,6 @@ export function StorefrontFeatureView({ portalMode }: StorefrontFeatureViewProps
   const { role, setRole } = useAuth();
   const { products, product, rates } = useActiveProductMetrics();
   const { setSelectedParentSku } = usePortalSelection();
-  const updateProductMutation = useUpdateProductMutation();
   const addB2cMutation = useAddToB2cCartMutation();
   const addB2bMutation = useAddToB2bDraftMutation();
   const favoritesQuery = useFavoritesQuery();
@@ -53,13 +51,9 @@ export function StorefrontFeatureView({ portalMode }: StorefrontFeatureViewProps
 
   const handleSelectProduct = (parentSku: string, previewColor?: MetalColor) => {
     setSelectedParentSku(parentSku);
-    if (previewColor) {
-      updateProductMutation.mutate({
-        parentSku,
-        patch: { metalColor: previewColor },
-      });
-    }
-    navigate(`${productRoutePrefix}/${encodeURIComponent(parentSku)}`);
+    navigate(`${productRoutePrefix}/${encodeURIComponent(parentSku)}`, {
+      state: previewColor ? { previewMetalColor: previewColor } : undefined,
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

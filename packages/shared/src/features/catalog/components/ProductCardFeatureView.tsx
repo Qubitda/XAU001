@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Calculator, Globe, ImagePlus, Layers, Pencil, Trash2 } from 'lucide-react';
 import { ProductCardView } from '../../../components/ProductCardView';
 import { ConfirmDialog } from '../../../components/crud/ConfirmDialog';
@@ -11,7 +11,7 @@ import {
   useUpdateProductMutation,
 } from '../hooks/useCatalogQueries';
 import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
-import type { ProductState } from '../types';
+import type { MetalColor, ProductState } from '../types';
 import {
   useAddToB2bDraftMutation,
   useAddToB2cCartMutation,
@@ -23,14 +23,20 @@ import {
   buildB2bOrderLineFromProduct,
   buildB2cCartItemFromProduct,
 } from '../../commerce/services/commerceService';
+import { computeJewelryMetrics } from '../../../utils/pricingEngine';
 
 interface ProductCardFeatureViewProps {
   portalMode?: 'b2c' | 'b2b';
 }
 
+interface ProductLocationState {
+  previewMetalColor?: MetalColor;
+}
+
 export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewProps = {}) {
   const { parentSku } = useParams<{ parentSku?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { role, setRole } = useAuth();
   const { setSelectedParentSku } = usePortalSelection();
   const { products, product, rates, computed } = useActiveProductMetrics(parentSku);
@@ -45,6 +51,8 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
   const [editOpen, setEditOpen] = useState(false);
   const [editTab, setEditTab] = useState<ProductModalTab>('genel');
   const [deleteOpen, setDeleteOpen] = useState(false);
+  /** Buyer surfaces configure variants locally — OPS PATCH requires catalog:write. */
+  const [variantPatch, setVariantPatch] = useState<Partial<ProductState>>({});
 
   const openEditor = (tab: ProductModalTab) => {
     setEditTab(tab);
@@ -56,6 +64,16 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
   const productRoutePrefix = portalMode === 'b2b' ? '/b2b/urun' : '/urun';
   // Storefront / B2B are sales surfaces only — OPS edit chrome stays in /ops.
   const showOpsToolbar = !portalMode && role === 'erp';
+  const isBuyerSurface = portalMode === 'b2c' || portalMode === 'b2b';
+
+  useEffect(() => {
+    if (!isBuyerSurface) {
+      setVariantPatch({});
+      return;
+    }
+    const preview = (location.state as ProductLocationState | null)?.previewMetalColor;
+    setVariantPatch(preview ? { metalColor: preview } : {});
+  }, [parentSku, location.state, isBuyerSurface]);
 
   useEffect(() => {
     if (parentSku && products.some((p) => p.parentSku === parentSku)) {
@@ -63,16 +81,30 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
     }
   }, [parentSku, products, setSelectedParentSku]);
 
-  const relatedProducts = useMemo(() => {
-    const others = products.filter((p) => p.parentSku !== product.parentSku);
-    const sameCategory = others.filter((p) => p.category === product.category);
-    const diffCategory = others.filter((p) => p.category !== product.category);
-    return [...sameCategory, ...diffCategory].slice(0, 3);
-  }, [products, product.parentSku, product.category]);
+  const displayProduct = useMemo(
+    () => (isBuyerSurface ? { ...product, ...variantPatch } : product),
+    [isBuyerSurface, product, variantPatch]
+  );
 
-  const isFavorite = (favoritesQuery.data ?? []).includes(product.parentSku);
+  const displayComputed = useMemo(
+    () => (isBuyerSurface ? computeJewelryMetrics(displayProduct, rates) : computed),
+    [isBuyerSurface, displayProduct, rates, computed]
+  );
+
+  const relatedProducts = useMemo(() => {
+    const others = products.filter((p) => p.parentSku !== displayProduct.parentSku);
+    const sameCategory = others.filter((p) => p.category === displayProduct.category);
+    const diffCategory = others.filter((p) => p.category !== displayProduct.category);
+    return [...sameCategory, ...diffCategory].slice(0, 3);
+  }, [products, displayProduct.parentSku, displayProduct.category]);
+
+  const isFavorite = (favoritesQuery.data ?? []).includes(displayProduct.parentSku);
 
   const handleUpdateProduct = (patch: Partial<ProductState>) => {
+    if (isBuyerSurface) {
+      setVariantPatch((prev) => ({ ...prev, ...patch }));
+      return;
+    }
     updateProductMutation.mutate({ parentSku: product.parentSku, patch });
   };
 
@@ -161,13 +193,13 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
       )}
 
       <ProductCardView
-        product={product}
+        product={displayProduct}
         relatedProducts={relatedProducts}
         rates={rates}
-        computed={computed}
+        computed={displayComputed}
         role={effectiveRole}
         isFavorite={isFavorite}
-        onToggleFavorite={() => toggleFavoriteMutation.mutate(product.parentSku)}
+        onToggleFavorite={() => toggleFavoriteMutation.mutate(displayProduct.parentSku)}
         onRoleChange={setRole}
         onUpdateProduct={handleUpdateProduct}
         onOpenPricing={() => navigate('/ops/fiyat-motoru')}
@@ -180,8 +212,8 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
         onAddToB2cCart={({ qty, engravingText, giftWrap }) => {
           addB2cMutation.mutate(
             buildB2cCartItemFromProduct({
-              product,
-              computed,
+              product: displayProduct,
+              computed: displayComputed,
               rates,
               qty,
               engravingText,
@@ -192,8 +224,8 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
         onAddToB2bOrder={({ lines, supplyType, dealerStampNote }) => {
           const orderLines = lines.map((entry) =>
             buildB2bOrderLineFromProduct({
-              product,
-              computed,
+              product: displayProduct,
+              computed: displayComputed,
               rates,
               qty: entry.qty,
               sizeOverride: entry.size,
