@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import ringFallbackImg from '../../../assets/images/se009_white_main_1795533192415.jpg';
 import necklaceFallbackImg from '../../../assets/images/kl022_necklace_main_1795533193295.jpg';
-import earringFallbackImg from '../../../assets/images/kp018_emerald_main_1795533193415.jpg';
+import earringFallbackImg from '../../../assets/images/category-earrings.jpg';
 import braceletFallbackImg from '../../../assets/images/bl031_bracelet_main_1795533193007.jpg';
 import type { ProductState } from '../../catalog/types';
 import { resolveProductThumbnail } from '../../../data/productMedia';
@@ -28,7 +28,7 @@ const FALLBACK_BY_CODE: Record<string, { img: string; alt: string }> = {
   },
   KUPE: {
     img: earringFallbackImg,
-    alt: 'TARA DIAMOND değerli taşlı ve pırlanta küpe kategorisi',
+    alt: 'TARA DIAMOND sarı altın küpe kategorisi',
   },
   BILEKLIK: {
     img: braceletFallbackImg,
