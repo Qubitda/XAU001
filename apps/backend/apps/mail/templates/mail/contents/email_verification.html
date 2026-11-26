@@ -1,0 +1,20 @@
+<h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:normal;color:#252321;">
+  E-posta doğrulama
+</h1>
+<p style="margin:0 0 14px 0;">
+  Merhaba{% if customer_name %} {{ customer_name }}{% endif %}, hesabınızı doğrulamak için aşağıdaki bağlantıyı kullanın.
+</p>
+{% if verify_url %}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td style="background:{{ primary_color }};border-radius:4px;">
+      <a href="{{ verify_url }}" style="display:inline-block;padding:12px 20px;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:bold;color:#ffffff;text-decoration:none;">
+        E-postamı Doğrula
+      </a>
+    </td>
+  </tr>
+</table>
+{% endif %}
+<p style="margin:18px 0 0 0;color:#6E675F;font-size:12px;">
+  Bu isteği siz yapmadıysanız bu iletiyi yok sayabilirsiniz.
+</p>

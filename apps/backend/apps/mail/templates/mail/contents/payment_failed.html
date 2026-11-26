@@ -1,0 +1,5 @@
+<p>Merhaba {{ customer_name }},</p>
+<p><strong>{{ order_no }}</strong> numaralı siparişiniz için ödeme tamamlanamadı.</p>
+{% if amount %}<p>Tutar: <strong>{{ amount }} {{ currency }}</strong></p>{% endif %}
+{% if error_message %}<p>Açıklama: {{ error_message }}</p>{% endif %}
+<p>Kartınızdan tahsilat yapılmadıysa başka bir ödeme yöntemiyle tekrar deneyebilirsiniz.</p>

@@ -1,0 +1,15 @@
+{
+  "name": "@taragold/frontend",
+  "private": true,
+  "type": "module",
+  "description": "Portal frontends umbrella (storefront, b2b, ops, corporate). Shared Vite helpers live here.",
+  "scripts": {
+    "dev:storefront": "npm --workspace @taragold/storefront run dev",
+    "dev:b2b": "npm --workspace @taragold/b2b run dev",
+    "dev:ops": "npm --workspace @taragold/ops run dev",
+    "dev:corporate": "npm --workspace @taragold/corporate run dev",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run lint --workspaces --if-present"
+  }
+}

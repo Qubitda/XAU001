@@ -1,0 +1,25 @@
+<h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:normal;color:#252321;">
+  Sepetiniz sizi bekliyor
+</h1>
+<p style="margin:0 0 14px 0;">
+  Merhaba{% if customer_name %} {{ customer_name }}{% endif %}, sepetinizde bıraktığınız tasarım{% if first_item_title %} (<strong>{{ first_item_title }}</strong>){% endif %} hâlâ sizin için duruyor.
+</p>
+{% if price_lock_active %}
+<p style="margin:0 0 14px 0;font-size:13px;color:#5C564F;">
+  Aktif kur kilidiniz {{ price_locked_until }} tarihine kadar geçerlidir. Süre dolursa güncel kur ile devam edebilirsiniz.
+</p>
+{% else %}
+<p style="margin:0 0 14px 0;font-size:13px;color:#5C564F;">
+  Ödeme adımında bir teknik aksaklık yaşadıysanız veya sayfa kapandıysa, sepetinizden kaldığınız yerden devam edebilirsiniz.
+</p>
+{% endif %}
+<p style="margin:0 0 18px 0;font-size:13px;color:#5C564F;">
+  Sigortalı kurye teslimatı ve sertifikalı ürünlerimizle güvenle tamamlayabilirsiniz.
+</p>
+{% if cart_url %}
+<p style="margin:0;">
+  <a href="{{ cart_url }}" style="display:inline-block;padding:12px 18px;background:#252321;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;">
+    Sepete dön →
+  </a>
+</p>
+{% endif %}

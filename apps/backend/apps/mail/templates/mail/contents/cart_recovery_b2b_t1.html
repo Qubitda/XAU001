@@ -1,0 +1,27 @@
+<h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:normal;color:#252321;">
+  Taslak sipariş fişiniz hazır
+</h1>
+<p style="margin:0 0 14px 0;">
+  Merhaba{% if customer_name %} {{ customer_name }}{% endif %},
+  <strong>{{ org_name }}</strong> hesabında {{ line_count }} kalemlik taslak sipariş fişiniz bekliyor
+  (≈ {{ cart_value_try }} TRY).
+</p>
+<p style="margin:0 0 14px 0;font-size:13px;color:#5C564F;">
+  Kaydetme veya onay adımında teknik bir aksaklık olduysa endişelenmeyin — fişiniz portalde duruyor.
+  Yönetici onayına sunmak için taslağı açıp proforma metnini kopyalayabilirsiniz.
+</p>
+{% if draft_url %}
+<p style="margin:0 0 10px 0;">
+  <a href="{{ draft_url }}" style="display:inline-block;padding:12px 18px;background:#252321;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;">
+    Taslağı / proformayı aç →
+  </a>
+</p>
+{% endif %}
+{% if draft_pdf_url %}
+<p style="margin:0 0 14px 0;font-size:12px;">
+  <a href="{{ draft_pdf_url }}" style="color:{{ primary_color }};">PDF proforma indir</a>
+</p>
+{% endif %}
+<p style="margin:0;font-size:12px;color:#8A837A;">
+  HAS, cari vade veya konsinye mutabakatı için bayi temsilciniz size yardımcı olur.
+</p>

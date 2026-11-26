@@ -1,0 +1,5 @@
+/**
+ * Portal entry — same Design System as globals.css (OPS / B2B).
+ * Kept as a stable import path for existing main.tsx files.
+ */
+@import "../globals.css";

@@ -1,0 +1,78 @@
+/**
+ * TARA DIAMOND — Light / Dark semantic tokens (shadcn-compatible).
+ * Toggle via `class="dark"` on <html>. Never hardcode HEX in components.
+ */
+
+:root {
+  color-scheme: light;
+
+  --background: var(--zinc-50);
+  --foreground: var(--zinc-950);
+  --card: var(--white);
+  --card-foreground: var(--zinc-950);
+  --popover: var(--white);
+  --popover-foreground: var(--zinc-950);
+  --primary: var(--zinc-900);
+  --primary-foreground: var(--zinc-50);
+  --secondary: var(--zinc-100);
+  --secondary-foreground: var(--zinc-900);
+  --muted: var(--zinc-100);
+  --muted-foreground: var(--zinc-500);
+  --accent: var(--zinc-100);
+  --accent-foreground: var(--zinc-900);
+  --destructive: var(--status-error);
+  --destructive-foreground: var(--status-error-foreground);
+  --border: var(--zinc-200);
+  --input: var(--zinc-200);
+  --ring: var(--zinc-400);
+
+  --success: var(--status-success);
+  --success-foreground: var(--status-success-foreground);
+  --warning: var(--status-warning);
+  --warning-foreground: var(--status-warning-foreground);
+  --info: var(--status-info);
+  --info-foreground: var(--status-info-foreground);
+
+  --sidebar: var(--white);
+  --sidebar-foreground: var(--zinc-950);
+  --sidebar-border: var(--zinc-200);
+  --sidebar-accent: var(--zinc-100);
+  --sidebar-accent-foreground: var(--zinc-900);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: var(--zinc-950);
+  --foreground: var(--zinc-50);
+  --card: var(--zinc-900);
+  --card-foreground: var(--zinc-50);
+  --popover: var(--zinc-900);
+  --popover-foreground: var(--zinc-50);
+  --primary: var(--zinc-50);
+  --primary-foreground: var(--zinc-900);
+  --secondary: var(--zinc-800);
+  --secondary-foreground: var(--zinc-50);
+  --muted: var(--zinc-800);
+  --muted-foreground: var(--zinc-400);
+  --accent: var(--zinc-800);
+  --accent-foreground: var(--zinc-50);
+  --destructive: #ef4444;
+  --destructive-foreground: var(--zinc-50);
+  --border: var(--zinc-800);
+  --input: var(--zinc-800);
+  --ring: var(--zinc-500);
+
+  --success: #22c55e;
+  --success-foreground: var(--zinc-950);
+  --warning: #f59e0b;
+  --warning-foreground: var(--zinc-950);
+  --info: #3b82f6;
+  --info-foreground: var(--zinc-50);
+
+  --sidebar: var(--zinc-900);
+  --sidebar-foreground: var(--zinc-50);
+  --sidebar-border: var(--zinc-800);
+  --sidebar-accent: var(--zinc-800);
+  --sidebar-accent-foreground: var(--zinc-50);
+}

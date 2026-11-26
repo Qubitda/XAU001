@@ -1,0 +1,26 @@
+{
+  "name": "taragold-monorepo",
+  "private": true,
+  "workspaces": [
+    "apps/frontend/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:storefront",
+    "dev:storefront": "npm --workspace @taragold/storefront run dev",
+    "dev:b2b": "npm --workspace @taragold/b2b run dev",
+    "dev:ops": "npm --workspace @taragold/ops run dev",
+    "dev:corporate": "npm --workspace @taragold/corporate run dev",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run lint --workspaces --if-present",
+    "openapi:generate": "npm --workspace @taragold/shared run openapi:generate",
+    "smoke": "python scripts/smoke_api.py",
+    "backend:migrate": "python apps/backend/manage.py migrate",
+    "backend:seed": "python apps/backend/manage.py seed_taragold",
+    "backend:run": "python apps/backend/manage.py runserver 0.0.0.0:8000",
+    "celery:worker": "python scripts/run_celery.py worker -l info --concurrency=2",
+    "celery:beat": "python scripts/run_celery.py beat -l info",
+    "jobs:run": "python apps/backend/manage.py run_scheduled_jobs"
+  }
+}

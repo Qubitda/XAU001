@@ -1,0 +1,7 @@
+/**
+ * Brand identity hooks (logos / marketing assets only).
+ * UI chrome uses semantic tokens from themes.css — no gold/burgundy UI palette.
+ */
+:root {
+  --brand-name: "TARA DIAMOND";
+}

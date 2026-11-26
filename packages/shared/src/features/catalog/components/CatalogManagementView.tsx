@@ -1,0 +1,339 @@
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Calculator,
+  ExternalLink,
+  Globe,
+  Image as ImageIcon,
+  Layers,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import { ConfirmDialog } from '../../../components/crud/ConfirmDialog';
+import { ListPage } from '../../../components/crud/ListPage';
+import { PortalDataCard } from '../../../components/portal';
+import {
+  Button,
+  Card,
+  CardContent,
+  Input,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '../../../components/ui';
+import { CapabilityGate } from '../../../providers/AuthProvider';
+import {
+  computeJewelryMetrics,
+  formatCurrencyValue,
+  formatTrNumber,
+} from '../../../utils/pricingEngine';
+import { resolveProductThumbnail } from '../../../data/productMedia';
+import {
+  useActiveProductMetrics,
+  useDeleteProductMutation,
+  usePortalSelection,
+  useUpdateProductMutation,
+} from '../hooks/useCatalogQueries';
+import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
+import type { ProductState } from '../types';
+
+const CATEGORY_OPTIONS = ['Tümü', 'Yüzük', 'Kolye', 'Bileklik', 'Küpe'] as const;
+
+export function CatalogManagementView() {
+  const navigate = useNavigate();
+  const { products, rates } = useActiveProductMetrics();
+  const { setSelectedParentSku } = usePortalSelection();
+  const updateProductMutation = useUpdateProductMutation();
+  const deleteProductMutation = useDeleteProductMutation();
+
+  const [query, setQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('Tümü');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingState, setEditingState] = useState<{
+    product: ProductState;
+    tab: ProductModalTab;
+  } | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState<ProductState | null>(null);
+
+  const rows = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('tr-TR');
+    return products
+      .filter((p) => {
+        if (categoryFilter !== 'Tümü' && p.category !== categoryFilter) return false;
+        if (!q) return true;
+        return (
+          p.parentSku.toLowerCase().includes(q) ||
+          p.title.toLocaleLowerCase('tr-TR').includes(q) ||
+          p.stoneType.toLocaleLowerCase('tr-TR').includes(q) ||
+          p.certificateAgency.toLowerCase().includes(q)
+        );
+      })
+      .map((product) => ({
+        product,
+        metrics: computeJewelryMetrics(product, rates),
+        thumbUrl: resolveProductThumbnail(product),
+      }));
+  }, [products, rates, query, categoryFilter]);
+
+  const handleConfirmDelete = async () => {
+    if (!deletingProduct) return;
+    await deleteProductMutation.mutateAsync(deletingProduct.parentSku);
+    setDeletingProduct(null);
+  };
+
+  return (
+    <CapabilityGate
+      capability="catalog:write"
+      fallback={
+        <Card className="max-w-xl mx-auto shadow-none">
+          <CardContent className="p-10 text-center space-y-2">
+            <h2 className="text-section text-foreground">Operasyon Katalog Yetkisi Gerekli</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Katalog ve stok yönetimi ekranı yalnızca merkez operasyon (OPS) hesaplarına açıktır.
+            </p>
+          </CardContent>
+        </Card>
+      }
+    >
+      <div className="space-y-6">
+        <ListPage
+          title="Katalog & Stok Yönetimi"
+          subtitle={`${products.length} aktif mücevher modeli · Fiyatlandırma, görsel/video galerisi ve SEO düzenleme`}
+          actions={
+            <>
+              <Button size="sm" variant="outline" onClick={() => navigate('/ops/fiyat-motoru')}>
+                <Calculator className="w-3.5 h-3.5" />
+                Fiyat Motoru
+              </Button>
+              <Button size="sm" variant="success" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-3.5 h-3.5" />
+                Yeni Ürün Ekle
+              </Button>
+            </>
+          }
+          filters={
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="relative flex-1 min-w-[220px] max-w-sm">
+                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Model kodu, ürün adı veya taş ara..."
+                  className="h-9 pl-8 text-xs"
+                />
+              </div>
+
+              <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
+                <TabsList className="h-9">
+                  {CATEGORY_OPTIONS.map((cat) => (
+                    <TabsTrigger key={cat} value={cat} className="text-xs px-3">
+                      {cat}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+          }
+        >
+          <PortalDataCard contentClassName="overflow-x-auto">
+            <Table className="text-xs">
+              <TableHeader className="bg-muted/40">
+                <TableRow>
+                  <TableHead className="px-4 font-medium">Model</TableHead>
+                  <TableHead className="px-4 font-medium">Ayar / Taş</TableHead>
+                  <TableHead className="px-4 font-medium text-right">Stok Adedi</TableHead>
+                  <TableHead className="px-4 font-medium text-right">Has Altın</TableHead>
+                  <TableHead className="px-4 font-medium text-right">B2B Toptan</TableHead>
+                  <TableHead className="px-4 font-medium text-right">B2C Vitrin</TableHead>
+                  <TableHead className="px-4 font-medium text-right">İşlemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(({ product, metrics, thumbUrl }) => (
+                  <TableRow key={product.parentSku}>
+                    <TableCell className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={thumbUrl}
+                          alt={product.title}
+                          referrerPolicy="no-referrer"
+                          className="w-11 h-11 rounded-md object-cover bg-muted border border-border shrink-0"
+                        />
+                        <div>
+                          <div className="font-medium text-foreground">{product.title}</div>
+                          <div className="font-mono text-[11px] text-muted-foreground">
+                            {product.parentSku} · {product.category} ·{' '}
+                            {product.certificateAgency || 'Sertifikasız'}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-foreground whitespace-nowrap">
+                      <div>
+                        {product.purityCode} {product.metalColor} Altın
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                        {formatTrNumber(metrics.totalStoneCarat, 2)} ct · {product.grossWeightGram} gr
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right whitespace-nowrap">
+                      <span
+                        className="font-mono tabular-nums text-foreground"
+                        title={product.stockStatus}
+                        aria-label={`${product.parentSku} stok adedi`}
+                      >
+                        {product.stockStatus === 'Siparişe Özel'
+                          ? '—'
+                          : `${formatTrNumber(product.stockQty ?? 0, 0)} adet`}
+                      </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right font-mono tabular-nums text-foreground whitespace-nowrap">
+                      {formatTrNumber(metrics.fireIncludedFineMetalGram, 4)} gr
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right font-mono font-medium tabular-nums text-foreground whitespace-nowrap">
+                      {metrics.ledger.hasB2bChannel
+                        ? formatCurrencyValue(metrics.finalB2bPriceCurrency, product.pricingCurrency)
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right font-mono font-semibold tabular-nums text-foreground whitespace-nowrap">
+                      {metrics.ledger.hasB2cChannel
+                        ? `${formatTrNumber(metrics.discountedB2cPriceTry, 0)} TL`
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Varyantlar"
+                          onClick={() => setEditingState({ product, tab: 'varyantlar' })}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Fiyatlandırma & Maliyet Düzenle"
+                          onClick={() => setEditingState({ product, tab: 'fiyatlandirma' })}
+                        >
+                          <Calculator className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Görsel, Video & Medya Yönetimi"
+                          onClick={() => setEditingState({ product, tab: 'medya' })}
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="SEO Ayarları"
+                          onClick={() => setEditingState({ product, tab: 'seo' })}
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Tüm Alanları Düzenle"
+                          onClick={() => setEditingState({ product, tab: 'genel' })}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Ürün sayfasını aç"
+                          onClick={() => {
+                            setSelectedParentSku(product.parentSku);
+                            navigate(`/urun/${encodeURIComponent(product.parentSku)}`);
+                          }}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </Button>
+                        <CapabilityGate capability="catalog:delete">
+                          <Button
+                            type="button"
+                            variant="ghost-destructive"
+                            size="icon"
+                            className="h-8 w-8"
+                            data-delete="true"
+                            title="Modeli sil"
+                            disabled={products.length <= 1}
+                            onClick={() => setDeletingProduct(product)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </CapabilityGate>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </PortalDataCard>
+        </ListPage>
+
+        <ProductEntityModal
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          mode="create"
+          onSaved={(saved) => setSelectedParentSku(saved.parentSku)}
+        />
+
+        {editingState && (
+          <ProductEntityModal
+            open={Boolean(editingState)}
+            onOpenChange={(open) => {
+              if (!open) setEditingState(null);
+            }}
+            mode="edit"
+            initialProduct={editingState.product}
+            initialTab={editingState.tab}
+          />
+        )}
+
+        <ConfirmDialog
+          open={Boolean(deletingProduct)}
+          onOpenChange={(open) => {
+            if (!open) setDeletingProduct(null);
+          }}
+          variant="destructive"
+          isLoading={deleteProductMutation.isPending}
+          title={deletingProduct ? `${deletingProduct.parentSku} modelini sil` : 'Modeli sil'}
+          description={
+            deletingProduct
+              ? `"${deletingProduct.title}" kaydı katalogdan kalıcı olarak kaldırılacak.`
+              : ''
+          }
+          confirmLabel="Kalıcı Sil"
+          cancelLabel="Vazgeç"
+          onConfirm={handleConfirmDelete}
+        />
+      </div>
+    </CapabilityGate>
+  );
+}

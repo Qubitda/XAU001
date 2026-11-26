@@ -1,0 +1,453 @@
+from decimal import Decimal
+import uuid
+from django.conf import settings
+from django.db import migrations, models
+import django.db.models.deletion
+
+
+class Migration(migrations.Migration):
+    initial = True
+
+    dependencies = [
+        ("catalog", "0001_initial"),
+        ("customers", "0001_initial"),
+        ("market", "0001_initial"),
+        ("organizations", "0001_initial"),
+        ("pricing", "0001_initial"),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
+    ]
+
+    operations = [
+        migrations.CreateModel(
+            name="B2cCartItem",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("sku", models.CharField(max_length=64)),
+                ("parent_sku", models.CharField(max_length=32)),
+                ("title", models.CharField(max_length=240)),
+                ("category", models.CharField(max_length=80)),
+                ("metal_color", models.CharField(max_length=24)),
+                ("purity_code", models.CharField(max_length=8)),
+                ("size", models.PositiveSmallIntegerField(default=14)),
+                ("size_unit_label", models.CharField(default="Yüzük Ölçüsü", max_length=40)),
+                ("qty", models.PositiveSmallIntegerField(default=1)),
+                ("engraving_text", models.CharField(blank=True, default="", max_length=40)),
+                ("gift_wrap", models.BooleanField(default=False)),
+                ("gift_note", models.CharField(blank=True, default="", max_length=200)),
+                ("certificate_label", models.CharField(blank=True, default="", max_length=120)),
+                ("stock_status", models.CharField(default="Stokta", max_length=24)),
+                ("lead_time_text", models.CharField(blank=True, default="", max_length=160)),
+                ("gross_weight_gram", models.DecimalField(decimal_places=4, default=Decimal("0"), max_digits=10)),
+                ("unit_list_price_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("unit_final_price_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("snapshot_code", models.CharField(max_length=40)),
+                (
+                    "price_quote",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="pricing.pricequote",
+                    ),
+                ),
+                (
+                    "rate_snapshot",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="market.ratesnapshot",
+                    ),
+                ),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="b2c_cart_items",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "variant",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="catalog.productvariant",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "commerce_b2c_cart_item",
+                "ordering": ["-created_at"],
+            },
+        ),
+        migrations.CreateModel(
+            name="B2cOrder",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("order_no", models.CharField(db_index=True, max_length=40, unique=True)),
+                ("gold_rate_try_per_gram", models.DecimalField(decimal_places=4, max_digits=14)),
+                ("payment_method", models.CharField(max_length=24)),
+                ("accepted_custom_policy", models.BooleanField(default=True)),
+                ("subtotal_list_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("campaign_discount_try", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=14)),
+                ("transfer_discount_try", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=14)),
+                ("insured_shipping_try", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=14)),
+                ("vat_included_try", models.DecimalField(decimal_places=2, default=Decimal("0.00"), max_digits=14)),
+                ("grand_total_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("ONAYLANDI", "Sipariş Onaylandı"),
+                            ("ATOLYE_URETIMDE", "Atölye & Kalite Kontrol"),
+                            ("SIGORTALI_KARGODA", "Sigortalı Kurye Yolda"),
+                            ("IPTAL_EDILDI", "İptal Edildi"),
+                            ("IADE_EDILDI", "İade Edildi"),
+                        ],
+                        default="ONAYLANDI",
+                        max_length=24,
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="+",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "customer",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="b2c_orders",
+                        to="customers.customer",
+                    ),
+                ),
+                (
+                    "price_lock",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="b2c_orders",
+                        to="pricing.pricelock",
+                    ),
+                ),
+                (
+                    "rate_snapshot",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="b2c_orders",
+                        to="market.ratesnapshot",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "commerce_b2c_order",
+                "ordering": ["-created_at"],
+            },
+        ),
+        migrations.CreateModel(
+            name="B2cOrderItem",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("sku", models.CharField(max_length=64)),
+                ("parent_sku", models.CharField(max_length=32)),
+                ("title", models.CharField(max_length=240)),
+                ("category", models.CharField(max_length=80)),
+                ("metal_color", models.CharField(max_length=24)),
+                ("purity_code", models.CharField(max_length=8)),
+                ("size", models.PositiveSmallIntegerField(default=14)),
+                ("size_unit_label", models.CharField(max_length=40)),
+                ("qty", models.PositiveSmallIntegerField(default=1)),
+                ("engraving_text", models.CharField(blank=True, default="", max_length=40)),
+                ("gift_wrap", models.BooleanField(default=False)),
+                ("gift_note", models.CharField(blank=True, default="", max_length=200)),
+                ("certificate_label", models.CharField(blank=True, default="", max_length=120)),
+                ("stock_status", models.CharField(max_length=24)),
+                ("lead_time_text", models.CharField(blank=True, default="", max_length=160)),
+                ("gross_weight_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_list_price_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("unit_final_price_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("snapshot_code", models.CharField(max_length=40)),
+                (
+                    "order",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="items",
+                        to="commerce.b2corder",
+                    ),
+                ),
+                (
+                    "price_quote",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="pricing.pricequote",
+                    ),
+                ),
+                (
+                    "rate_snapshot",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="market.ratesnapshot",
+                    ),
+                ),
+                (
+                    "variant",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="catalog.productvariant",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "commerce_b2c_order_item",
+            },
+        ),
+        migrations.CreateModel(
+            name="B2bDraftLine",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("sku", models.CharField(max_length=64)),
+                ("parent_sku", models.CharField(max_length=32)),
+                ("title", models.CharField(max_length=240)),
+                ("category", models.CharField(max_length=80)),
+                ("metal_color", models.CharField(max_length=24)),
+                ("purity_code", models.CharField(max_length=8)),
+                ("size", models.PositiveSmallIntegerField(default=14)),
+                ("size_unit_label", models.CharField(default="Yüzük Ölçüsü", max_length=40)),
+                ("qty", models.PositiveIntegerField(default=1)),
+                ("supply_type", models.CharField(default="STOCK", max_length=16)),
+                ("dealer_stamp_note", models.CharField(blank=True, default="", max_length=80)),
+                ("unit_gross_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_net_metal_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_fire_included_fine_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_labor_and_stone_usd", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("unit_wholesale_usd", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("unit_wholesale_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("pricing_currency", models.CharField(default="USD", max_length=16)),
+                ("snapshot_code", models.CharField(max_length=40)),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name="+",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="b2b_draft_lines",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "price_quote",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="pricing.pricequote",
+                    ),
+                ),
+                (
+                    "rate_snapshot",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="market.ratesnapshot",
+                    ),
+                ),
+                (
+                    "variant",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="catalog.productvariant",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "commerce_b2b_draft_line",
+                "ordering": ["-created_at"],
+            },
+        ),
+        migrations.CreateModel(
+            name="B2bOrder",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("order_no", models.CharField(db_index=True, max_length=40, unique=True)),
+                ("usd_try_rate", models.DecimalField(decimal_places=4, max_digits=14)),
+                ("gold_rate_try_per_gram", models.DecimalField(decimal_places=4, max_digits=14)),
+                ("contact_person", models.CharField(max_length=120)),
+                ("settlement_method", models.CharField(max_length=24)),
+                ("rate_lock_mode", models.CharField(max_length=24)),
+                ("consignment_days", models.PositiveSmallIntegerField(blank=True, null=True)),
+                ("delivery_method", models.CharField(max_length=32)),
+                ("order_note", models.TextField(blank=True, default="")),
+                ("accepted_weight_tolerance", models.BooleanField(default=True)),
+                ("total_pieces", models.PositiveIntegerField()),
+                ("total_gross_gram", models.DecimalField(decimal_places=4, max_digits=12)),
+                ("total_has_gold_gram", models.DecimalField(decimal_places=4, max_digits=12)),
+                ("total_labor_and_stone_usd", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("total_wholesale_usd", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("total_wholesale_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("PROFORMA_ONAYLANDI", "Proforma Onaylandı"),
+                            ("ATOLYE_PLANLANDI", "Atölye Üretim Planlandı"),
+                            ("SEVK_HAZIR", "Sevke Hazır"),
+                            ("IPTAL_EDILDI", "İptal Edildi"),
+                            ("IADE_EDILDI", "İade Edildi"),
+                        ],
+                        default="PROFORMA_ONAYLANDI",
+                        max_length=24,
+                    ),
+                ),
+                (
+                    "branch",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="b2b_orders",
+                        to="organizations.branch",
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="created_b2b_orders",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "organization",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="b2b_orders",
+                        to="organizations.organization",
+                    ),
+                ),
+                (
+                    "rate_snapshot",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="b2b_orders",
+                        to="market.ratesnapshot",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "commerce_b2b_order",
+                "ordering": ["-created_at"],
+            },
+        ),
+        migrations.CreateModel(
+            name="B2bOrderLine",
+            fields=[
+                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("sku", models.CharField(max_length=64)),
+                ("parent_sku", models.CharField(max_length=32)),
+                ("title", models.CharField(max_length=240)),
+                ("category", models.CharField(max_length=80)),
+                ("metal_color", models.CharField(max_length=24)),
+                ("purity_code", models.CharField(max_length=8)),
+                ("size", models.PositiveSmallIntegerField(default=14)),
+                ("size_unit_label", models.CharField(max_length=40)),
+                ("qty", models.PositiveIntegerField(default=1)),
+                ("supply_type", models.CharField(max_length=16)),
+                ("dealer_stamp_note", models.CharField(blank=True, default="", max_length=80)),
+                ("unit_gross_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_net_metal_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_fire_included_fine_gram", models.DecimalField(decimal_places=4, max_digits=10)),
+                ("unit_labor_and_stone_usd", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("unit_wholesale_usd", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("unit_wholesale_try", models.DecimalField(decimal_places=2, max_digits=14)),
+                ("pricing_currency", models.CharField(max_length=16)),
+                ("snapshot_code", models.CharField(max_length=40)),
+                (
+                    "order",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="lines",
+                        to="commerce.b2border",
+                    ),
+                ),
+                (
+                    "price_quote",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="pricing.pricequote",
+                    ),
+                ),
+                (
+                    "rate_snapshot",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="market.ratesnapshot",
+                    ),
+                ),
+                (
+                    "variant",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="+",
+                        to="catalog.productvariant",
+                    ),
+                ),
+            ],
+            options={
+                "db_table": "commerce_b2b_order_line",
+            },
+        ),
+    ]

@@ -1,0 +1,10 @@
+<p>Merhaba {{ customer_name }},</p>
+<p><strong>{{ order_no }}</strong> numaralı siparişiniz için havale / EFT bilgileri aşağıdadır.</p>
+<p>
+  <strong>Banka:</strong> {{ bank_name }}<br />
+  <strong>Hesap Sahibi:</strong> {{ account_holder }}<br />
+  <strong>IBAN:</strong> {{ iban }}<br />
+  <strong>Tutar:</strong> {{ amount }} {{ currency }}<br />
+  <strong>Açıklama (zorunlu):</strong> {{ transfer_reference }}
+</p>
+<p>Havale açıklamasına yalnızca sipariş referans kodunu yazınız. Ödeme sonrası hesabınızdan dekont yükleyebilirsiniz.</p>

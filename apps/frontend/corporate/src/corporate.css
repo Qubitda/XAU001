@@ -1,0 +1,20 @@
+/**
+ * Corporate page accents — semantic tokens only (no brand HEX palette).
+ */
+.corporate-hero {
+  background: linear-gradient(
+    135deg,
+    var(--zinc-900) 0%,
+    var(--zinc-950) 55%,
+    var(--black) 100%
+  );
+  color: var(--zinc-50);
+}
+
+.corporate-hero-muted {
+  color: var(--zinc-400);
+}
+
+.corporate-accent-text {
+  color: var(--muted-foreground);
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TARA DIAMOND — Bayi Portalı</title>
+    <script>
+      (function () {
+        try {
+          var k = 'tara-theme';
+          var t = localStorage.getItem(k);
+          var d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var r = t === 'dark' || (t !== 'light' && d) ? 'dark' : 'light';
+          var e = document.documentElement;
+          e.classList.toggle('dark', r === 'dark');
+          e.style.colorScheme = r;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="bg-background text-foreground antialiased font-sans">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

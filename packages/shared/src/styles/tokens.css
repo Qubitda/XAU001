@@ -1,0 +1,45 @@
+/**
+ * TARA DIAMOND — Design System primitives (Single Source of Truth).
+ * Semantic theme values live in themes.css. Do not redefine colors per app.
+ */
+
+:root {
+  /* Zinc scale */
+  --zinc-50: #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+  --zinc-700: #3f3f46;
+  --zinc-800: #27272a;
+  --zinc-900: #18181b;
+  --zinc-950: #09090b;
+  --white: #ffffff;
+  --black: #000000;
+
+  /* Status (functional only) */
+  --status-success: #16a34a;
+  --status-success-foreground: #ffffff;
+  --status-warning: #d97706;
+  --status-warning-foreground: #ffffff;
+  --status-error: #dc2626;
+  --status-error-foreground: #ffffff;
+  --status-info: #2563eb;
+  --status-info-foreground: #ffffff;
+
+  /* Geometry */
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  /* Layout */
+  --portal-sidebar-width: 15.5rem;
+
+  /* Typography families (Geist — all apps) */
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  /* Serif alias → same sans (legacy className font-serif must not pull Cormorant) */
+  --font-serif: var(--font-sans);
+}

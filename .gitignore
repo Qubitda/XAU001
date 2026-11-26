@@ -1,0 +1,35 @@
+# Node / Frontend
+node_modules/
+build/
+dist/
+coverage/
+apps/frontend/*/dist/
+packages/*/dist/
+
+# Python / Django Backend
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+apps/backend/staticfiles/
+apps/backend/media/
+apps/backend/db.sqlite3
+*.sqlite3
+
+# Environment & OS
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# Local tooling / media caches
+.aistudio/
+.cursor/
+celery_*.txt
+celery_*.log
+celerybeat-schedule*
+metadata.json
+*.zip
+apps/frontend/*.zip

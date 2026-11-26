@@ -1,0 +1,318 @@
+/**
+ * TARA DIAMOND — Unified Design System entry (all apps).
+ * Storefront / Corporate / OPS / B2B import this (or portal-app.css which re-exports it).
+ */
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* Scan shared package sources — Tailwind ignores node_modules / sibling packages by default */
+@source ".";
+@source "./styles";
+
+@import "./styles/tokens.css";
+@import "./styles/themes.css";
+@import "./styles/brand.css";
+@import "./styles/portal-theme.css";
+
+/* Class-based dark mode (ThemeProvider toggles .dark on <html>) */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-serif: "Geist Variable", system-ui, sans-serif;
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  h1,
+  h2 {
+    text-wrap: balance;
+  }
+}
+
+/* ==========================================================================
+   AI Studio Glow — spectrum frame (functional accent, not brand chrome)
+   ========================================================================== */
+
+@keyframes ai-studio-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.ai-studio-frame {
+  position: relative;
+  isolation: isolate;
+}
+
+.ai-studio-halo {
+  position: absolute;
+  inset: -8px;
+  border-radius: inherit;
+  overflow: hidden;
+  filter: blur(22px);
+  opacity: 0.48;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ai-studio-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ai-studio-spectrum {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 160vmax;
+  height: 160vmax;
+  transform: translate(-50%, -50%) rotate(0deg);
+  background: conic-gradient(
+    from 0deg,
+    #4285f4 0deg,
+    #9b72cb 60deg,
+    #ea4335 120deg,
+    #fbbc04 180deg,
+    #34a853 240deg,
+    #24c1e0 300deg,
+    #4285f4 360deg
+  );
+  animation: ai-studio-spin 6s linear infinite;
+  will-change: transform;
+}
+
+/* Radix overlay & dialog transitions */
+@keyframes dialog-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialog-overlay-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialog-content-in {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes dialog-content-out {
+  from {
+    opacity: 1;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+
+.dialog-overlay[data-state="open"] {
+  animation: dialog-overlay-in 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dialog-overlay[data-state="closed"] {
+  animation: dialog-overlay-out 130ms ease-in forwards;
+}
+
+.dialog-content[data-state="open"] {
+  animation: dialog-content-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.dialog-content[data-state="closed"] {
+  animation: dialog-content-out 130ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-studio-spectrum {
+    animation: none !important;
+  }
+  .dialog-overlay[data-state="open"],
+  .dialog-overlay[data-state="closed"],
+  .dialog-content[data-state="open"],
+  .dialog-content[data-state="closed"] {
+    animation: none !important;
+  }
+}
+
+/* TipTap rich text editor */
+.tiptap {
+  outline: none;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0.5rem 0;
+}
+
+.tiptap h2 {
+  font-size: 1.25rem;
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 0.45rem 0;
+}
+
+.tiptap h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0.4rem 0;
+}
+
+.tiptap p {
+  margin: 0.35rem 0;
+}
+
+.tiptap ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+
+.tiptap ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+
+.tiptap a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.tiptap mark {
+  border-radius: 0.15rem;
+  padding: 0 0.1em;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 28%, transparent) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--muted-foreground) 25%, transparent);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Delete affordances — always destructive red (icons use currentColor)
+   -------------------------------------------------------------------------- */
+@layer components {
+  [data-delete='true'],
+  button[data-delete='true'],
+  a[data-delete='true'] {
+    color: var(--destructive) !important;
+  }
+
+  [data-delete='true']:hover,
+  button[data-delete='true']:hover {
+    background-color: color-mix(in oklab, var(--destructive) 10%, transparent) !important;
+    color: var(--destructive) !important;
+  }
+
+  /* Lucide trash icons inside unmarked delete controls */
+  button[title*='sil' i] svg.lucide-trash-2,
+  button[title*='Sil' i] svg.lucide-trash-2,
+  button[aria-label*='sil' i] svg.lucide-trash-2,
+  button[aria-label*='Sil' i] svg.lucide-trash-2,
+  button[title*='delete' i] svg.lucide-trash-2,
+  button[aria-label*='delete' i] svg.lucide-trash-2 {
+    color: var(--destructive);
+  }
+}

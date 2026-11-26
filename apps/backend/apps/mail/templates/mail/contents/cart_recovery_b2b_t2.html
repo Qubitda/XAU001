@@ -1,0 +1,23 @@
+<h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:normal;color:#252321;">
+  {{ org_name }} — taslak fiş hatırlatması
+</h1>
+<p style="margin:0 0 14px 0;">
+  Merhaba{% if customer_name %} {{ customer_name }}{% endif %},
+  taslak sipariş fişinizde {{ stock_line_count }} stok / {{ production_line_count }} üretim kalemi bulunuyor.
+</p>
+<ul style="margin:0 0 16px 0;padding-left:18px;font-size:13px;color:#5C564F;line-height:1.55;">
+  <li><strong>Hazır stok:</strong> Proforma onayında ayırma yapılır.</li>
+  <li><strong>Atölye üretim:</strong> tipik 5–7 iş günü lead-time.</li>
+  <li><strong>Kur politikası:</strong> siparişte kilitleme veya teslimatta mutabakat.</li>
+  <li><strong>Hesaplaşma:</strong> HAS + işçilik dövizi, cari vade veya konsinye.</li>
+</ul>
+{% if draft_url %}
+<p style="margin:0 0 12px 0;">
+  <a href="{{ draft_url }}" style="display:inline-block;padding:12px 18px;background:#252321;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;">
+    Onay için proforma / taslağı aç →
+  </a>
+</p>
+{% endif %}
+<p style="margin:0;font-size:12px;color:#8A837A;">
+  Limit veya vade konusunda destek isterseniz temsilcinizle iletişime geçebilirsiniz — baskısız bir hatırlatmadır.
+</p>

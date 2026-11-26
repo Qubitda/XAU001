@@ -1,0 +1,24 @@
+<h1 style="margin:0 0 12px 0;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:normal;color:#252321;">
+  Sepetinizdeki tasarımlar hâlâ sizin
+</h1>
+<p style="margin:0 0 14px 0;">
+  Merhaba{% if customer_name %} {{ customer_name }}{% endif %},
+  {% if first_item_title %}<strong>{{ first_item_title }}</strong> ve{% endif %}
+  sepetinizdeki {{ line_count }} kalem sizi bekliyor (≈ {{ cart_value_try }} TRY).
+</p>
+<ul style="margin:0 0 16px 0;padding-left:18px;font-size:13px;color:#5C564F;line-height:1.55;">
+  <li>GIA / IGI sertifikalı taşlar</li>
+  <li>Sigortalı kurye teslimatı</li>
+  <li>25.000 TL üzeri siparişlerde ücretsiz sigortalı kargo</li>
+  <li>Havale ile %3 nakit avantajı</li>
+</ul>
+{% if cart_url %}
+<p style="margin:0 0 12px 0;">
+  <a href="{{ cart_url }}" style="display:inline-block;padding:12px 18px;background:#252321;color:#ffffff;text-decoration:none;font-size:13px;font-weight:600;">
+    Alışverişi tamamla →
+  </a>
+</p>
+{% endif %}
+<p style="margin:0;font-size:12px;color:#8A837A;">
+  Zamanınıza saygı duyuyoruz — bu bir hatırlatmadır, baskı değildir.
+</p>
