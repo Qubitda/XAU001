@@ -268,5 +268,7 @@ class OpsSmtpConnectionTestView(APIView):
             if ctx.organization is None:
                 raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
             org = ctx.organization
+        from .service import MailService
+
         result = MailService().test_smtp_connection(organization=org)
         return envelope_response(result, request)

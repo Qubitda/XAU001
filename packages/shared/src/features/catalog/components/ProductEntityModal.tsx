@@ -877,7 +877,21 @@ export function ProductEntityModal({
       }
     } catch (err) {
       if (err instanceof ApiClientError) {
-        setServerError(err.message);
+        const detailLines = err.details
+          ? Object.entries(err.details)
+              .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : String(msgs)}`)
+              .filter(Boolean)
+          : [];
+        if (err.details) {
+          const mapped: Record<string, string> = {};
+          for (const [field, msgs] of Object.entries(err.details)) {
+            mapped[field] = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
+          }
+          setFieldErrors((prev) => ({ ...prev, ...mapped }));
+        }
+        setServerError(
+          detailLines.length > 0 ? `${err.message} (${detailLines.join(' · ')})` : err.message
+        );
       } else {
         setServerError('Kayıt sırasında beklenmeyen bir hata oluştu.');
       }
