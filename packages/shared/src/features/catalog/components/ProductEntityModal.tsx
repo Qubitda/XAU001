@@ -516,6 +516,16 @@ export function ProductEntityModal({
         changed = true;
       }
 
+      if (!prev.stoneType) {
+        updates.stoneType = 'Pırlanta';
+        changed = true;
+      }
+
+      if ((!prev.salesChannels || prev.salesChannels.length === 0) && channelOptions.length > 0) {
+        updates.salesChannels = channelOptions.map((c) => c.code);
+        changed = true;
+      }
+
       if (!prev.metalName && metalNameOpts.options.length > 0) {
         const goldOpt = metalNameOpts.options.find(
           (o) =>
@@ -529,7 +539,7 @@ export function ProductEntityModal({
 
       return changed ? { ...prev, ...updates } : prev;
     });
-  }, [open, mode, productTypeOpts.options, metalNameOpts.options]);
+  }, [open, mode, productTypeOpts.options, metalNameOpts.options, channelOptions]);
 
   useEffect(() => {
     if (!open || mode !== 'create' || !draft.metalName) return;
@@ -787,26 +797,32 @@ export function ProductEntityModal({
       collection: draft.collection,
       purityCode: draft.purityCode,
       metalColor: draft.metalColor,
-      stoneType: draft.stoneType,
-      grossWeightGram: draft.grossWeightGram,
-      centerStoneCarat: draft.centerStoneCarat,
-      sideStoneCarat: draft.sideStoneCarat,
-      fireRatePct: draft.fireRatePct,
-      stockStatus: draft.stockStatus,
-      stockQty: draft.stockQty,
-      ownershipType: draft.ownershipType,
-      visualType: draft.visualType,
-      description: draft.description,
+      stoneType: draft.stoneType || 'Taşsız',
+      grossWeightGram: Number(draft.grossWeightGram) || 0,
+      centerStoneCarat: Number(draft.centerStoneCarat) || 0,
+      sideStoneCarat: Number(draft.sideStoneCarat) || 0,
+      fireRatePct: Number(draft.fireRatePct) || 0,
+      stockStatus: draft.stockStatus || 'Stokta',
+      stockQty: Number(draft.stockQty) || 0,
+      ownershipType: draft.ownershipType || 'Öz Mal',
+      visualType: draft.visualType || 'solitaire_ring',
+      description: draft.description || '',
+      salesChannels: draft.salesChannels ?? [],
     });
 
     if (!parsed.success) {
       const nextErrors: Record<string, string> = {};
+      const errorLabels: string[] = [];
       for (const issue of parsed.error.issues) {
         const key = String(issue.path[0] ?? 'form');
-        if (!nextErrors[key]) nextErrors[key] = issue.message;
+        if (!nextErrors[key]) {
+          nextErrors[key] = issue.message;
+          errorLabels.push(issue.message);
+        }
       }
       setFieldErrors(nextErrors);
-      const stoneKeys = new Set(['grossWeightGram', 'centerStoneCarat', 'sideStoneCarat', 'fireRatePct', 'stoneType']);
+      setServerError(`Lütfen formu kontrol edin: ${errorLabels.slice(0, 3).join(', ')}`);
+      const stoneKeys = new Set(['centerStoneCarat', 'sideStoneCarat', 'fireRatePct']);
       const firstKey = Object.keys(nextErrors)[0];
       if (firstKey && stoneKeys.has(firstKey)) {
         setActiveTab('tas-montur');
@@ -822,13 +838,16 @@ export function ProductEntityModal({
       slugifyTurkish(`${normalizedSku}-${draft.title}`) ||
       `${normalizedSku.toLowerCase()}-mucevher`;
     const resolvedMetaTitle = draft.metaTitle.trim() || `${draft.title.trim()} | Tara Gold`;
+    const resolvedDescription =
+      draft.description.trim() ||
+      `${draft.title.trim()} (${draft.purityCode} ${draft.metalColor})`;
 
     const payload: ProductState = {
       ...draft,
       ...buildDetailPayload(draft, finenessMap),
       parentSku: normalizedSku,
       title: draft.title.trim(),
-      description: draft.description.trim(),
+      description: resolvedDescription,
       seoSlug: resolvedSlug,
       metaTitle: resolvedMetaTitle,
       hasCertificate: Boolean(draft.certificateAgency.trim()),
@@ -1344,7 +1363,34 @@ export function ProductEntityModal({
 
             {/* Physical Dimensions & Sizes */}
             <div className="pt-4 border-t border-border space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="space-y-1.5 min-w-0">
+                  <Label className="font-medium block">
+                    Brüt Ağırlık (gr) <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0.01}
+                    value={draft.grossWeightGram || ''}
+                    placeholder="ör. 3.50"
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      patchDraft('grossWeightGram', val);
+                      if (val > 0) {
+                        setFieldErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.grossWeightGram;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className="text-right font-mono tabular-nums"
+                  />
+                  {fieldErrors.grossWeightGram && (
+                    <p className="text-[11px] text-red-700 font-medium">{fieldErrors.grossWeightGram}</p>
+                  )}
+                </div>
                 <div className="space-y-1.5 min-w-0">
                   <Label className="font-medium block">Varsayılan Ölçü</Label>
                   <Input
@@ -1442,7 +1488,9 @@ export function ProductEntityModal({
                   </select>
                 </div>
                 <div className="space-y-1.5 min-w-0">
-                  <Label className="font-medium block">Ürün Satış Kanalları</Label>
+                  <Label className="font-medium block">
+                    Ürün Satış Kanalları <span className="text-rose-500">*</span>
+                  </Label>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {channelOptions.map((ch) => {
                       const selected = (draft.salesChannels ?? []).includes(ch.code);
@@ -1452,15 +1500,22 @@ export function ProductEntityModal({
                           type="button"
                           onClick={() => {
                             const curr = draft.salesChannels ?? [];
-                            patchDraft(
-                              'salesChannels',
-                              selected ? curr.filter((c) => c !== ch.code) : [...curr, ch.code]
-                            );
+                            const next = selected
+                              ? curr.filter((c) => c !== ch.code)
+                              : [...curr, ch.code];
+                            patchDraft('salesChannels', next);
+                            if (next.length > 0) {
+                              setFieldErrors((prev) => {
+                                const copy = { ...prev };
+                                delete copy.salesChannels;
+                                return copy;
+                              });
+                            }
                           }}
                           className={`px-2.5 py-1.5 rounded-md border text-[11px] font-medium cursor-pointer shrink-0 ${
                             selected
                               ? 'bg-foreground text-primary-foreground border-foreground'
-                              : 'bg-card text-muted-foreground border-input'
+                              : 'bg-card text-muted-foreground border-input hover:border-foreground/40'
                           }`}
                         >
                           {ch.label}
@@ -1468,6 +1523,9 @@ export function ProductEntityModal({
                       );
                     })}
                   </div>
+                  {fieldErrors.salesChannels && (
+                    <p className="text-[11px] text-red-700 font-medium">{fieldErrors.salesChannels}</p>
+                  )}
                 </div>
               </div>
 
@@ -3306,6 +3364,12 @@ export function ProductEntityModal({
                 Fiziksel depo/tedarikçi stok satırında yaşar; bu alan ürün kartı etiketidir.
               </p>
             </div>
+          </div>
+        )}
+
+        {serverError && (
+          <div className="px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs font-medium">
+            {serverError}
           </div>
         )}
       </div>
