@@ -18,13 +18,35 @@ import {
 import { useAuth } from '@taragold/shared/providers/AuthProvider';
 import { useB2bOrdersQuery } from '@taragold/shared/features/commerce/hooks/useCommerceQueries';
 import { formatTrNumber } from '@taragold/shared/utils/pricingEngine';
-import { BackendPendingNotice } from '@taragold/shared/components/PortalRouteGuard';
 import { apiFetch } from '@taragold/shared/lib/api/client';
+
+type LedgerEntry = {
+  id: string;
+  entryType: string;
+  referenceNo: string;
+  amountUsd: string;
+  hasGoldGram: string;
+  note: string;
+  createdAt: string;
+};
 
 export function B2bCurrentAccountPage() {
   const { activeOrganization } = useAuth();
   const ordersQuery = useB2bOrdersQuery();
   const orders = ordersQuery.data ?? [];
+  const [ledgerRows, setLedgerRows] = useState<LedgerEntry[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<LedgerEntry[]>('/api/v1/b2b/ledger?pageSize=50')
+      .then((res) => {
+        if (active && Array.isArray(res.data)) setLedgerRows(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const creditLimitUsd = Number(activeOrganization?.creditLimitUsd ?? 0);
   const usedCreditUsd = Number(activeOrganization?.usedCreditUsd ?? 0);
@@ -123,11 +145,42 @@ export function B2bCurrentAccountPage() {
         </Card>
       </div>
 
-      <BackendPendingNotice
-        title="Detaylı Cari Ekstre / Tahsilat Hareketleri API'si Henüz Açık Değil"
-        description="Backend tarafında DealerLedgerEntry kayıtları sipariş ve iptal/iade işlemlerinde otomatik tutulmaktadır; ancak kronolojik cari hesap hareket listesi ve tahsilat/has teslimat dekontu sorgulama endpoint'i henüz dışa açılmamıştır. Aşağıda sipariş kaynaklı borç özetiniz görüntülenir."
-        endpointHint="GET /api/v1/b2b/ledger"
-      />
+      <PortalDataCard title={`Cari Ekstre Hareketleri (${ledgerRows.length})`}>
+        {ledgerRows.length === 0 ? (
+          <div className="p-5 text-xs text-muted-foreground">Henüz cari hesap hareketi bulunmuyor.</div>
+        ) : (
+          <Table className="text-xs">
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead className="px-4 uppercase text-[11px]">Tarih</TableHead>
+                <TableHead className="px-4 uppercase text-[11px]">İşlem Tipi</TableHead>
+                <TableHead className="px-4 uppercase text-[11px]">Referans</TableHead>
+                <TableHead className="px-4 text-right uppercase text-[11px]">Has (gr)</TableHead>
+                <TableHead className="px-4 text-right uppercase text-[11px]">Tutar ($)</TableHead>
+                <TableHead className="px-4 uppercase text-[11px]">Not</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {ledgerRows.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="px-4 text-muted-foreground">
+                    {new Date(entry.createdAt).toLocaleDateString('tr-TR')}
+                  </TableCell>
+                  <TableCell className="px-4 font-mono">{entry.entryType}</TableCell>
+                  <TableCell className="px-4 font-mono">{entry.referenceNo}</TableCell>
+                  <TableCell className="px-4 text-right font-mono tabular-nums">
+                    {formatTrNumber(Number(entry.hasGoldGram), 4)}
+                  </TableCell>
+                  <TableCell className="px-4 text-right font-mono tabular-nums">
+                    ${formatTrNumber(Number(entry.amountUsd), 2)}
+                  </TableCell>
+                  <TableCell className="px-4 text-muted-foreground">{entry.note || '—'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </PortalDataCard>
 
       <PortalDataCard
         title={`Sipariş Kaynaklı Hesaplaşma Özeti (${activeOrders.length} aktif sipariş)`}
@@ -183,8 +236,73 @@ export function B2bCurrentAccountPage() {
   );
 }
 
+type OrgMemberRow = {
+  id: string;
+  email: string;
+  fullName: string;
+  phone: string;
+  roleKey: string;
+  jobTitle: string;
+  isActive: boolean;
+};
+
 export function B2bCompanyUsersPage() {
   const { user, activeMembership, activeOrganization } = useAuth();
+  const isOrgAdmin = (activeMembership?.roleKey ?? user.roleKey) === 'ORG_ADMIN';
+  const [members, setMembers] = useState<OrgMemberRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [roleKey, setRoleKey] = useState<'B2B_BUYER' | 'ORG_ADMIN'>('B2B_BUYER');
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const loadMembers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch<OrgMemberRow[]>('/api/v1/b2b/organization/users');
+      setMembers(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setMembers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
+
+  const onInvite = async () => {
+    if (!email.trim() || !fullName.trim()) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      await apiFetch('/api/v1/b2b/organization/users', {
+        method: 'POST',
+        body: { email: email.trim(), fullName: fullName.trim(), roleKey },
+      });
+      setEmail('');
+      setFullName('');
+      await loadMembers();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Kullanıcı eklenemedi.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActive = async (m: OrgMemberRow) => {
+    try {
+      await apiFetch(`/api/v1/b2b/organization/users/${m.id}`, {
+        method: 'PATCH',
+        body: { isActive: !m.isActive },
+      });
+      await loadMembers();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Durum güncellenemedi.');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -193,11 +311,77 @@ export function B2bCompanyUsersPage() {
         title="Firma Kullanıcıları"
       />
 
-      <BackendPendingNotice
-        title="Firma Kullanıcı Yönetimi API'si Backend'de Henüz Tanımlı Değil"
-        description="Aynı bayi firmasına bağlı diğer çalışanları listeleme, yeni kullanıcı davet etme ve şube/rol atama işlemleri için backend uç noktaları henüz açılmamıştır. Aşağıda yalnızca aktif oturumunuza ait sunucu doğrulamalı yetki kaydı görüntülenir."
-        endpointHint="GET / POST / PATCH /api/v1/b2b/organization/users"
-      />
+      {err && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">{err}</div>
+      )}
+
+      {isOrgAdmin && (
+        <PortalDataCard title="Yeni Firma Kullanıcısı Ekle" contentClassName="p-5 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Ad Soyad"
+            />
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="E-posta"
+            />
+            <select
+              className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+              value={roleKey}
+              onChange={(e) => setRoleKey(e.target.value as 'B2B_BUYER' | 'ORG_ADMIN')}
+            >
+              <option value="B2B_BUYER">B2B Alıcı (B2B_BUYER)</option>
+              <option value="ORG_ADMIN">Firma Yöneticisi (ORG_ADMIN)</option>
+            </select>
+          </div>
+          <Button size="sm" disabled={saving || !email.trim() || !fullName.trim()} onClick={() => void onInvite()}>
+            {saving ? 'Ekleniyor…' : 'Kullanıcı Ekle'}
+          </Button>
+        </PortalDataCard>
+      )}
+
+      <PortalDataCard title={`Firma Üyeleri (${members.length})`}>
+        {loading ? (
+          <p className="p-4 text-xs text-muted-foreground">Yükleniyor…</p>
+        ) : (
+          <Table className="text-xs">
+            <TableHeader className="bg-muted/40">
+              <TableRow>
+                <TableHead className="px-4">Ad Soyad</TableHead>
+                <TableHead className="px-4">E-posta</TableHead>
+                <TableHead className="px-4">Rol</TableHead>
+                <TableHead className="px-4">Durum</TableHead>
+                {isOrgAdmin && <TableHead className="px-4 text-right">İşlem</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell className="px-4 font-medium">{m.fullName}</TableCell>
+                  <TableCell className="px-4 text-muted-foreground">{m.email}</TableCell>
+                  <TableCell className="px-4 font-mono">{m.roleKey}</TableCell>
+                  <TableCell className="px-4">
+                    <Badge variant={m.isActive ? 'default' : 'secondary'}>
+                      {m.isActive ? 'Aktif' : 'Pasif'}
+                    </Badge>
+                  </TableCell>
+                  {isOrgAdmin && (
+                    <TableCell className="px-4 text-right">
+                      <Button size="sm" variant="ghost" onClick={() => void toggleActive(m)}>
+                        {m.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                      </Button>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </PortalDataCard>
 
       <PortalDataCard title="Aktif Oturum Kullanıcısı" contentClassName="p-6 space-y-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -240,9 +424,16 @@ export function B2bCompanyUsersPage() {
 }
 
 export function B2bCompanySettingsPage() {
-  const { activeOrganization } = useAuth();
+  const { activeOrganization, hasCapability } = useAuth();
+  const canMail = hasCapability('mail:manage');
+  const canPay = hasCapability('payments:manage');
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [orgPhone, setOrgPhone] = useState((activeOrganization as { phone?: string } | null)?.phone ?? '');
+  const [orgEmail, setOrgEmail] = useState((activeOrganization as { email?: string } | null)?.email ?? '');
+  const [orgCity, setOrgCity] = useState(activeOrganization?.city ?? '');
+  const [orgContact, setOrgContact] = useState(activeOrganization?.contactName ?? '');
+  const [savingOrg, setSavingOrg] = useState(false);
 
   const [host, setHost] = useState('');
   const [port, setPort] = useState(587);
@@ -264,20 +455,24 @@ export function B2bCompanySettingsPage() {
     setError(null);
     try {
       const [smtpRes, payRes] = await Promise.all([
-        apiFetch<
-          Array<{
-            host: string;
-            port: number;
-            encryption: string;
-            username: string;
-            fromName: string;
-            fromEmail: string;
-            hasPassword: boolean;
-          }>
-        >('/api/v1/ops/mail/smtp-settings'),
-        apiFetch<
-          Array<{ hasApiKey: boolean; hasSecretKey: boolean; baseUrl: string; isSandbox: boolean }>
-        >('/api/v1/ops/payments/provider-settings'),
+        canMail
+          ? apiFetch<
+              Array<{
+                host: string;
+                port: number;
+                encryption: string;
+                username: string;
+                fromName: string;
+                fromEmail: string;
+                hasPassword: boolean;
+              }>
+            >('/api/v1/ops/mail/smtp-settings')
+          : Promise.resolve({ data: [] }),
+        canPay
+          ? apiFetch<
+              Array<{ hasApiKey: boolean; hasSecretKey: boolean; baseUrl: string; isSandbox: boolean }>
+            >('/api/v1/ops/payments/provider-settings')
+          : Promise.resolve({ data: [] }),
       ]);
       const smtp = (smtpRes.data ?? [])[0];
       if (smtp) {
@@ -294,10 +489,32 @@ export function B2bCompanySettingsPage() {
         setBaseUrl(pay.baseUrl || 'sandbox-api.iyzipay.com');
         setIsSandbox(pay.isSandbox);
       }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ayarlar yüklenemedi');
+    } catch {
+      // ignore if user lacks permissions
     }
-  }, []);
+  }, [canMail, canPay]);
+
+  const saveOrgProfile = async () => {
+    setSavingOrg(true);
+    setError(null);
+    setOk(null);
+    try {
+      await apiFetch('/api/v1/b2b/organization', {
+        method: 'PATCH',
+        body: {
+          phone: orgPhone,
+          email: orgEmail,
+          city: orgCity,
+          contactName: orgContact,
+        },
+      });
+      setOk('Firma bilgileri güncellendi.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Firma bilgileri güncellenemedi.');
+    } finally {
+      setSavingOrg(false);
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -394,12 +611,6 @@ export function B2bCompanySettingsPage() {
         </div>
       )}
 
-      <BackendPendingNotice
-        title="Firma Profili Güncelleme API'si Backend'de Henüz Tanımlı Değil"
-        description="Firma ünvanı, vergi bilgisi, fatura adresi ve şube düzenleme işlemleri için backend güncelleme endpoint'i henüz bulunmamaktadır. Mevcut kurumsal kayıtlarınız salt okunur olarak sunulmaktadır."
-        endpointHint="PATCH /api/v1/b2b/organization"
-      />
-
       {activeOrganization && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <PortalDataCard
@@ -407,6 +618,29 @@ export function B2bCompanySettingsPage() {
             className="lg:col-span-7"
             contentClassName="p-6 space-y-4"
           >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pb-3 border-b border-border">
+              <div>
+                <Label>Yetkili İrtibat</Label>
+                <Input value={orgContact} onChange={(e) => setOrgContact(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Şehir</Label>
+                <Input value={orgCity} onChange={(e) => setOrgCity(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Telefon</Label>
+                <Input value={orgPhone} onChange={(e) => setOrgPhone(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>E-posta</Label>
+                <Input value={orgEmail} onChange={(e) => setOrgEmail(e.target.value)} className="mt-1" />
+              </div>
+              <div className="sm:col-span-2">
+                <Button size="sm" disabled={savingOrg} onClick={() => void saveOrgProfile()}>
+                  {savingOrg ? 'Kaydediliyor…' : 'Firma Bilgilerini Güncelle'}
+                </Button>
+              </div>
+            </div>
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
                 <dt className="text-slate-500">Firma Ünvanı</dt>

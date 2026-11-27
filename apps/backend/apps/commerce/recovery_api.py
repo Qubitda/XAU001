@@ -36,7 +36,9 @@ class OpsSalesTaskListView(APIView):
     def get(self, request: Request):
         qs = OpsSalesTask.objects.select_related("user", "organization")
         status = (request.query_params.get("status") or "").strip().upper()
-        if status:
+        if status == "ALL":
+            pass
+        elif status:
             qs = qs.filter(status=status)
         else:
             qs = qs.filter(status=OpsSalesTask.Status.OPEN)

@@ -46,6 +46,7 @@ type ProviderSetting = {
   baseUrl: string;
   callbackBaseUrl: string;
   isSandbox: boolean;
+  passInstallmentFeeToCustomer?: boolean;
   isActive: boolean;
   hasApiKey: boolean;
   hasSecretKey: boolean;
@@ -175,6 +176,9 @@ export function OpsSettingsPage() {
       setBaseUrl(row.baseUrl || 'sandbox-api.iyzipay.com');
       setCallbackBaseUrl(row.callbackBaseUrl || '');
       setIsSandbox(row.isSandbox);
+      if (typeof row.passInstallmentFeeToCustomer === 'boolean') {
+        setPassFee(row.passInstallmentFeeToCustomer);
+      }
     }
   }, []);
 

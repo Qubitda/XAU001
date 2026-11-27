@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ClipboardList, Copy, History, RotateCcw, Search } from 'lucide-react';
+import { Check, ClipboardList, Copy, Download, History, RotateCcw, Search } from 'lucide-react';
 import {
   PortalDataCard,
   PortalOrderCardsSkeleton,
   PortalPageHeader,
 } from '@taragold/shared/components/portal';
 import { Badge, Button, Input } from '@taragold/shared/components/ui';
+import { apiDownloadBlob } from '@taragold/shared/lib/api/client';
 import {
   useB2bOrdersQuery,
   useCommerceUI,
@@ -177,6 +178,23 @@ export function B2bOrdersPage() {
                         Proforma
                       </>
                     )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await apiDownloadBlob(
+                          `/api/v1/b2b/orders/${encodeURIComponent(order.orderNo)}/proforma.pdf`,
+                          `proforma-${order.orderNo}.pdf`
+                        );
+                      } catch {
+                        // ignore
+                      }
+                    }}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    PDF
                   </Button>
                   <Button
                     size="sm"

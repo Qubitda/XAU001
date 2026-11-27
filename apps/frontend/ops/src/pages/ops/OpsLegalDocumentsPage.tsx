@@ -151,7 +151,17 @@ export function OpsLegalDocumentsPage() {
   async function exportIys() {
     try {
       const res = await apiFetch<{ items: unknown[]; note: string }>('/api/v1/ops/consents/iys-export');
-      toast.success(`İYS export: ${Array.isArray(res.data.items) ? res.data.items.length : 0} kayıt`);
+      const items = Array.isArray(res.data.items) ? res.data.items : [];
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `iys-consents-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`İYS export indirildi: ${items.length} kayıt`);
     } catch (e) {
       toast.error(e instanceof ApiClientError ? e.message : 'Export başarısız');
     }

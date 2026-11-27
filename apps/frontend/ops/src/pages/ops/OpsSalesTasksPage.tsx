@@ -61,13 +61,13 @@ export function OpsSalesTasksPage() {
     void load();
   }, [load]);
 
-  const patchStatus = async (id: string, next: 'DONE' | 'DISMISSED') => {
+  const patchStatus = async (id: string, next: 'DONE' | 'DISMISSED', note?: string) => {
     setError(null);
     setOk(null);
     try {
       await apiFetch(`/api/v1/ops/sales-tasks/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status: next }),
+        body: note !== undefined ? { status: next, note } : { status: next },
       });
       setOk(next === 'DONE' ? 'Görev tamamlandı.' : 'Görev kapatıldı.');
       await load();
@@ -112,7 +112,7 @@ export function OpsSalesTasksPage() {
                 <option value="OPEN">Açık</option>
                 <option value="DONE">Tamamlandı</option>
                 <option value="DISMISSED">Kapatıldı</option>
-                <option value="">Tümü</option>
+                <option value="ALL">Tümü</option>
               </select>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={() => void load()}>

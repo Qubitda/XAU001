@@ -149,6 +149,144 @@ function B2cAccountShell({
   );
 }
 
+function B2cProfileCard({ user }: { user: { fullName: string; email: string; roleKey: string } }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [profile, setProfile] = useState({
+    fullName: user.fullName,
+    phone: '',
+    city: '',
+    address: '',
+    identityOrTaxNo: '',
+  });
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<{
+      fullName?: string;
+      phone?: string;
+      city?: string;
+      address?: string;
+      identityOrTaxNo?: string;
+    }>('/api/v1/storefront/profile')
+      .then((res) => {
+        if (!active || !res.data) return;
+        setProfile({
+          fullName: res.data.fullName || user.fullName,
+          phone: res.data.phone || '',
+          city: res.data.city || '',
+          address: res.data.address || '',
+          identityOrTaxNo: res.data.identityOrTaxNo || '',
+        });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user.fullName]);
+
+  async function saveProfile() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await apiFetch('/api/v1/storefront/profile', {
+        method: 'PATCH',
+        body: profile,
+      });
+      setEditing(false);
+      setMsg('Profil bilgileri güncellendi.');
+    } catch {
+      setMsg('Profil güncellenemedi.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-card border border-border rounded-[6px] p-6 space-y-4">
+      <div className="flex items-center justify-between border-b border-border pb-3">
+        <h2 className="font-serif text-xl font-normal text-foreground">Hesap Bilgileri</h2>
+        <button
+          type="button"
+          onClick={() => setEditing((v) => !v)}
+          className="text-xs font-medium text-muted-foreground hover:text-foreground underline underline-offset-4 cursor-pointer"
+        >
+          {editing ? 'Vazgeç' : 'Düzenle'}
+        </button>
+      </div>
+      {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
+      {editing ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <input
+            className="border border-border rounded-md px-3 py-2 bg-background"
+            placeholder="Ad Soyad"
+            value={profile.fullName}
+            onChange={(e) => setProfile((p) => ({ ...p, fullName: e.target.value }))}
+          />
+          <input
+            className="border border-border rounded-md px-3 py-2 bg-background"
+            placeholder="Telefon"
+            value={profile.phone}
+            onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
+          />
+          <input
+            className="border border-border rounded-md px-3 py-2 bg-background"
+            placeholder="Şehir"
+            value={profile.city}
+            onChange={(e) => setProfile((p) => ({ ...p, city: e.target.value }))}
+          />
+          <input
+            className="border border-border rounded-md px-3 py-2 bg-background"
+            placeholder="TCKN / VKN (opsiyonel)"
+            value={profile.identityOrTaxNo}
+            onChange={(e) => setProfile((p) => ({ ...p, identityOrTaxNo: e.target.value }))}
+          />
+          <input
+            className="border border-border rounded-md px-3 py-2 bg-background sm:col-span-2"
+            placeholder="Adres"
+            value={profile.address}
+            onChange={(e) => setProfile((p) => ({ ...p, address: e.target.value }))}
+          />
+          <div className="sm:col-span-2 flex justify-end">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void saveProfile()}
+              className={TARA_PRIMARY_BTN_CLASS}
+            >
+              {saving ? 'Kaydediliyor…' : 'Kaydet'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs">
+          <div>
+            <dt className="text-muted-foreground">Ad Soyad</dt>
+            <dd className="font-medium text-foreground mt-1">{profile.fullName}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">E-posta</dt>
+            <dd className="font-medium text-foreground mt-1 break-all">{user.email}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Telefon</dt>
+            <dd className="font-medium text-foreground mt-1">{profile.phone || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Şehir</dt>
+            <dd className="font-medium text-foreground mt-1">{profile.city || '—'}</dd>
+          </div>
+          <div className="sm:col-span-2">
+            <dt className="text-muted-foreground">Hesap Tipi</dt>
+            <dd className="font-mono text-foreground mt-1">{user.roleKey}</dd>
+          </div>
+        </dl>
+      )}
+    </div>
+  );
+}
+
 export function B2cAccountOverviewPage() {
   const { user } = useAuth();
   const ordersQuery = useB2cOrdersQuery();
@@ -218,26 +356,7 @@ export function B2cAccountOverviewPage() {
         </div>
       </div>
 
-      {/* Profile Summary Card */}
-      <div className="bg-card border border-border rounded-[6px] p-6 space-y-4">
-        <div className="border-b border-border pb-3">
-          <h2 className="font-serif text-xl font-normal text-foreground">Hesap Bilgileri</h2>
-        </div>
-        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-5 text-xs">
-          <div>
-            <dt className="text-muted-foreground">Ad Soyad</dt>
-            <dd className="font-medium text-foreground mt-1">{user.fullName}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">E-posta</dt>
-            <dd className="font-medium text-foreground mt-1 break-all">{user.email}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Hesap Tipi</dt>
-            <dd className="font-mono text-foreground mt-1">{user.roleKey}</dd>
-          </div>
-        </dl>
-      </div>
+      <B2cProfileCard user={user} />
 
       {/* Recent Orders */}
       {orders.length > 0 && (
@@ -341,6 +460,18 @@ export function B2cAddressesPage() {
     }
   }
 
+  async function setDefaultAddress(id: string) {
+    try {
+      await apiFetch(`/api/v1/storefront/addresses/${id}`, {
+        method: 'PATCH',
+        body: { isDefault: true },
+      });
+      await load();
+    } catch {
+      setError('Varsayılan adres güncellenemedi.');
+    }
+  }
+
   async function removeAddress(id: string) {
     try {
       await apiFetch(`/api/v1/storefront/addresses/${id}`, { method: 'DELETE' });
@@ -421,13 +552,26 @@ export function B2cAddressesPage() {
               <p className="text-muted-foreground leading-relaxed">{addr.line}</p>
               <div className="pt-2.5 border-t border-border flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
                 <span>{addr.phone || addr.contactName || '—'}</span>
-                <button
-                  type="button"
-                  className="underline"
-                  onClick={() => void removeAddress(addr.id)}
-                >
-                  Sil
-                </button>
+                <div className="flex items-center gap-3">
+                  {addr.isDefault ? (
+                    <span className="font-medium text-foreground">Varsayılan</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="underline cursor-pointer"
+                      onClick={() => void setDefaultAddress(addr.id)}
+                    >
+                      Varsayılan Yap
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="underline cursor-pointer"
+                    onClick={() => void removeAddress(addr.id)}
+                  >
+                    Sil
+                  </button>
+                </div>
               </div>
             </div>
           ))}

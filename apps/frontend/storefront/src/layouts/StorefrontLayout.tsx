@@ -308,15 +308,23 @@ export function StorefrontLayout() {
     navigate('/');
   };
 
-  const handleNewsletterSubmit = (e: FormEvent) => {
+  const handleNewsletterSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const cleaned = newsletterEmail.trim();
     if (!cleaned || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) {
       setNewsletterStatus('error');
       return;
     }
-    setNewsletterStatus('subscribed');
-    setNewsletterEmail('');
+    try {
+      await apiFetch('/api/v1/storefront/newsletter', {
+        method: 'POST',
+        body: { email: cleaned },
+      });
+      setNewsletterStatus('subscribed');
+      setNewsletterEmail('');
+    } catch {
+      setNewsletterStatus('error');
+    }
   };
 
   const scrollToTop = () => {

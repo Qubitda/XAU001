@@ -23,18 +23,18 @@ import {
 } from '@taragold/shared/components/ui';
 import { useActiveProductMetrics } from '@taragold/shared/features/catalog/hooks/useCatalogQueries';
 import {
-  useB2bOrdersQuery,
-  useB2cOrdersQuery,
-} from '@taragold/shared/features/commerce/hooks/useCommerceQueries';
+  useOpsB2bOrdersQuery,
+  useOpsB2cOrdersQuery,
+} from '@taragold/shared/features/ops/hooks/useOpsQueries';
 import { computeJewelryMetrics, formatTrNumber } from '@taragold/shared/utils/pricingEngine';
 
 export function OpsDashboardPage() {
   const { products, rates } = useActiveProductMetrics();
-  const b2bOrdersQuery = useB2bOrdersQuery();
-  const b2cOrdersQuery = useB2cOrdersQuery();
+  const b2bOrdersQuery = useOpsB2bOrdersQuery({ pageSize: 100 });
+  const b2cOrdersQuery = useOpsB2cOrdersQuery({ pageSize: 100 });
 
-  const b2bOrders = b2bOrdersQuery.data ?? [];
-  const b2cOrders = b2cOrdersQuery.data ?? [];
+  const b2bOrders = b2bOrdersQuery.data?.items ?? [];
+  const b2cOrders = b2cOrdersQuery.data?.items ?? [];
 
   const stats = useMemo(() => {
     const pendingB2b = b2bOrders.filter((o) => o.status === 'PROFORMA_ONAYLANDI').length;

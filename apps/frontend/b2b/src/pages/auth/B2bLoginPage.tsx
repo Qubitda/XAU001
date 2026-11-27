@@ -12,9 +12,9 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Button, Input, Label } from '@taragold/shared/components/ui';
+import { apiFetch } from '@taragold/shared/lib/api/client';
 import { useAuth } from '@taragold/shared/providers/AuthProvider';
 import {
-  BackendPendingNotice,
   hasB2bAccess,
   resolveHomeForSession,
 } from '@taragold/shared/components/PortalRouteGuard';
@@ -35,7 +35,14 @@ export function B2bLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [applyAttempted, setApplyAttempted] = useState(false);
+  const [applyCompany, setApplyCompany] = useState('');
+  const [applyTax, setApplyTax] = useState('');
+  const [applyCity, setApplyCity] = useState('');
+  const [applyContact, setApplyContact] = useState('');
+  const [applyEmail, setApplyEmail] = useState('');
+  const [applyPhone, setApplyPhone] = useState('');
+  const [applySubmitting, setApplySubmitting] = useState(false);
+  const [applyResult, setApplyResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const from = (location.state as { from?: string } | null)?.from;
 
@@ -260,47 +267,127 @@ export function B2bLoginPage() {
                   </p>
                 </div>
 
-                <BackendPendingNotice
-                  title="Online Bayilik Başvuru API'si Henüz Tanımlı Değil"
-                  description="Bayilik başvuru kayıt servisi backend'de henüz açılmamıştır. Yeni bayi tanımlaması, vergi levhası doğrulaması ve cari limit açılışı için bayi@taradiamond.com.tr veya +90 (212) 519 40 10 üzerinden toptan ekibimizle iletişime geçiniz."
-                  endpointHint="POST /api/v1/b2b/applications"
-                />
-
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    setApplyAttempted(true);
+                    setApplySubmitting(true);
+                    setApplyResult(null);
+                    try {
+                      const res = await apiFetch<{ code?: string }>('/api/v1/b2b/applications', {
+                        method: 'POST',
+                        body: {
+                          companyName: applyCompany,
+                          taxOfficeAndNo: applyTax,
+                          city: applyCity,
+                          contactName: applyContact,
+                          phone: applyPhone,
+                          email: applyEmail,
+                        },
+                      });
+                      setApplyResult({
+                        ok: true,
+                        msg: `Başvurunuz alındı (Referans: ${res.data?.code ?? 'PENDING'}). Onay sonrası sizinle iletişime geçilecektir.`,
+                      });
+                      setApplyCompany('');
+                      setApplyTax('');
+                      setApplyCity('');
+                      setApplyContact('');
+                      setApplyPhone('');
+                      setApplyEmail('');
+                    } catch (err) {
+                      setApplyResult({
+                        ok: false,
+                        msg: err instanceof Error ? err.message : 'Başvuru gönderilemedi.',
+                      });
+                    } finally {
+                      setApplySubmitting(false);
+                    }
                   }}
                   className="space-y-3 text-caption"
                 >
                   <div className="space-y-1">
                     <Label htmlFor="b2b-company">Firma Ünvanı</Label>
-                    <Input id="b2b-company" type="text" required placeholder="Örn: Anadolu Kuyumculuk Ltd. Şti." />
+                    <Input
+                      id="b2b-company"
+                      type="text"
+                      required
+                      value={applyCompany}
+                      onChange={(e) => setApplyCompany(e.target.value)}
+                      placeholder="Örn: Anadolu Kuyumculuk Ltd. Şti."
+                    />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label htmlFor="b2b-tax">Vergi Dairesi &amp; No</Label>
-                      <Input id="b2b-tax" type="text" required placeholder="VD · 10 haneli VKN" />
+                      <Input
+                        id="b2b-tax"
+                        type="text"
+                        required
+                        value={applyTax}
+                        onChange={(e) => setApplyTax(e.target.value)}
+                        placeholder="VD · 10 haneli VKN"
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="b2b-city">Şehir</Label>
-                      <Input id="b2b-city" type="text" required placeholder="İstanbul" />
+                      <Input
+                        id="b2b-city"
+                        type="text"
+                        required
+                        value={applyCity}
+                        onChange={(e) => setApplyCity(e.target.value)}
+                        placeholder="İstanbul"
+                      />
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="b2b-contact">Yetkili Ad Soyad &amp; Telefon</Label>
-                    <Input id="b2b-contact" type="text" required placeholder="Ad Soyad · 05XX XXX XX XX" />
+                    <Label htmlFor="b2b-contact">Yetkili Ad Soyad</Label>
+                    <Input
+                      id="b2b-contact"
+                      type="text"
+                      required
+                      value={applyContact}
+                      onChange={(e) => setApplyContact(e.target.value)}
+                      placeholder="Ad Soyad"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="b2b-phone">Telefon</Label>
+                      <Input
+                        id="b2b-phone"
+                        type="text"
+                        value={applyPhone}
+                        onChange={(e) => setApplyPhone(e.target.value)}
+                        placeholder="05XX XXX XX XX"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="b2b-email">E-posta</Label>
+                      <Input
+                        id="b2b-email"
+                        type="email"
+                        value={applyEmail}
+                        onChange={(e) => setApplyEmail(e.target.value)}
+                        placeholder="yetkili@firma.com"
+                      />
+                    </div>
                   </div>
 
-                  {applyAttempted && (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-destructive">
-                      Başvuru iletilemedi: Backend sunucusunda bayilik başvuru endpoint'i henüz
-                      bulunmuyor.
+                  {applyResult && (
+                    <div
+                      className={`rounded-md border px-3.5 py-2.5 text-xs ${
+                        applyResult.ok
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'border-destructive/30 bg-destructive/10 text-destructive'
+                      }`}
+                    >
+                      {applyResult.msg}
                     </div>
                   )}
 
-                  <Button type="submit" variant="secondary" className="w-full">
-                    Başvuruyu Gönder (Backend Bekleniyor)
+                  <Button type="submit" variant="secondary" className="w-full" disabled={applySubmitting}>
+                    {applySubmitting ? 'Gönderiliyor…' : 'Bayilik Başvurusunu Gönder'}
                   </Button>
                 </form>
               </div>

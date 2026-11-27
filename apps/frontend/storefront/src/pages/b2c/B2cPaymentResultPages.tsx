@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { apiFetch } from '@taragold/shared/lib/api/client';
 
 function ResultShell({
   tone,
@@ -33,11 +34,48 @@ function ResultShell({
 export function B2cPaymentSuccessPage() {
   const [params] = useSearchParams();
   const orderNo = params.get('orderNo') || '';
+  const [verifiedStatus, setVerifiedStatus] = useState<'loading' | 'verified' | 'pending' | 'unknown'>(
+    orderNo ? 'loading' : 'unknown'
+  );
+  const [paidAmount, setPaidAmount] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!orderNo) return;
+    let active = true;
+    apiFetch<{ payments?: Array<{ status?: string; paidPrice?: string; amountTry?: string }> }>(
+      `/api/v1/storefront/orders/${encodeURIComponent(orderNo)}/payments`
+    )
+      .then((res) => {
+        if (!active) return;
+        const payments = res.data?.payments ?? [];
+        const ok = payments.find((p) => p.status === 'SUCCESS');
+        if (ok) {
+          setVerifiedStatus('verified');
+          setPaidAmount(ok.paidPrice ?? ok.amountTry ?? null);
+        } else if (payments.length > 0) {
+          setVerifiedStatus('pending');
+        } else {
+          setVerifiedStatus('unknown');
+        }
+      })
+      .catch(() => {
+        if (active) setVerifiedStatus('unknown');
+      });
+    return () => {
+      active = false;
+    };
+  }, [orderNo]);
 
   return (
     <ResultShell tone="success" title="Ödeme başarılı">
       <p className="text-sm text-muted-foreground leading-relaxed">
-        Kart ödemeniz iyzico üzerinden alındı.
+        {verifiedStatus === 'loading'
+          ? 'Ödeme durumu doğrulanıyor…'
+          : verifiedStatus === 'verified'
+            ? `Kart ödemeniz doğrulandı${paidAmount ? ` (${paidAmount} TL)` : ''}.`
+            : verifiedStatus === 'pending'
+              ? 'Ödeme işleminiz alındı, banka/iyzico onayı bekleniyor.'
+              : 'Kart ödemeniz iyzico üzerinden alındı.'}
         {orderNo ? (
           <>
             {' '}

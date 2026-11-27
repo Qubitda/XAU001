@@ -35,6 +35,7 @@ export function OpsWebhooksPage() {
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState('');
+  const [isPlatform, setIsPlatform] = useState(false);
   const [organizationId, setOrganizationId] = useState('');
   const [events, setEvents] = useState<string[]>(['b2b.order.created']);
   const [plaintextSecret, setPlaintextSecret] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export function OpsWebhooksPage() {
     try {
       const res = await apiFetch<CreateResponse>('/api/v1/ops/webhooks', {
         method: 'POST',
-        body: { organizationId, url, events },
+        body: isPlatform ? { isPlatform: true, url, events } : { organizationId, url, events },
       });
       if (res.data?.secret) setPlaintextSecret(res.data.secret);
       setUrl('');
@@ -111,11 +112,26 @@ export function OpsWebhooksPage() {
       ) : null}
 
       <PortalDataCard title="Yeni webhook">
+        <div className="mb-3 flex items-center gap-2 text-xs">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isPlatform}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setIsPlatform(next);
+                setEvents(next ? ['b2c.order.created'] : ['b2b.order.created']);
+              }}
+            />
+            <span>Platform Webhook (B2C olayları için)</span>
+          </label>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label>Firma</Label>
             <select
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+              disabled={isPlatform}
               value={organizationId}
               onChange={(e) => setOrganizationId(e.target.value)}
             >
@@ -132,7 +148,7 @@ export function OpsWebhooksPage() {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {EVENT_OPTIONS.map((ev) => (
+          {EVENT_OPTIONS.filter((ev) => (isPlatform ? true : ev !== 'b2c.order.created')).map((ev) => (
             <Button
               key={ev}
               type="button"
@@ -147,7 +163,7 @@ export function OpsWebhooksPage() {
         <Button
           className="mt-4"
           variant="success"
-          disabled={!url || !organizationId || events.length === 0}
+          disabled={!url || (!isPlatform && !organizationId) || events.length === 0}
           onClick={() => void onCreate()}
         >
           <Plus className="w-4 h-4 mr-1" />
@@ -172,7 +188,7 @@ export function OpsWebhooksPage() {
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell>{row.organizationName}</TableCell>
+                  <TableCell>{row.organizationName || 'Platform'}</TableCell>
                   <TableCell className="max-w-xs truncate font-mono text-xs">{row.url}</TableCell>
                   <TableCell className="text-xs">{row.events.join(', ')}</TableCell>
                   <TableCell>

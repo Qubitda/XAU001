@@ -98,6 +98,14 @@ from apps.integrations.api import (
 from apps.contracts.storefront_api import (
     StorefrontLegalDocumentDetailView,
     StorefrontLegalDocumentListView,
+    StorefrontNewsletterSubscribeView,
+)
+from apps.finance.b2b_api import B2bLedgerListView
+from apps.organizations.b2b_api import (
+    B2bApplicationCreateView,
+    B2bOrganizationPatchView,
+    B2bOrganizationUserDetailView,
+    B2bOrganizationUsersView,
 )
 from apps.contracts.ops_api import OpsIysConsentExportView, OpsLegalDocumentDetailView
 from apps.messaging.ops_api import OpsMessagingLogListView, OpsMessagingStatusView
@@ -196,6 +204,11 @@ urlpatterns = [
         name="storefront-legal-document",
     ),
     path(
+        "api/v1/storefront/newsletter",
+        StorefrontNewsletterSubscribeView.as_view(),
+        name="storefront-newsletter",
+    ),
+    path(
         "api/v1/storefront/site-contact",
         StorefrontSiteContactView.as_view(),
         name="storefront-site-contact",
@@ -285,6 +298,15 @@ urlpatterns = [
         "api/v1/b2b/orders/<str:order_no>/reorder",
         B2bOrderReorderView.as_view(),
         name="b2b-order-reorder",
+    ),
+    path("api/v1/b2b/applications", B2bApplicationCreateView.as_view(), name="b2b-applications"),
+    path("api/v1/b2b/ledger", B2bLedgerListView.as_view(), name="b2b-ledger"),
+    path("api/v1/b2b/organization", B2bOrganizationPatchView.as_view(), name="b2b-organization"),
+    path("api/v1/b2b/organization/users", B2bOrganizationUsersView.as_view(), name="b2b-organization-users"),
+    path(
+        "api/v1/b2b/organization/users/<uuid:membership_id>",
+        B2bOrganizationUserDetailView.as_view(),
+        name="b2b-organization-user-detail",
     ),
     # OPS — users / orgs / customers
     path("api/v1/ops/users", OpsUserListCreateView.as_view(), name="ops-users"),
