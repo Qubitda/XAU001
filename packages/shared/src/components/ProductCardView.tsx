@@ -68,18 +68,6 @@ interface ProductCardViewProps {
   onOpenB2bOrder?: () => void;
 }
 
-const SIZE_STOCK_MAP: Record<number, { status: 'Stokta' | 'Tükendi' | 'Siparişe Özel'; qty: number; barcode: string }> = {
-  10: { status: 'Siparişe Özel', qty: 0, barcode: 'SİPARİŞ-10' },
-  11: { status: 'Siparişe Özel', qty: 0, barcode: 'SİPARİŞ-11' },
-  12: { status: 'Tükendi', qty: 0, barcode: 'P692102' },
-  13: { status: 'Stokta', qty: 1, barcode: 'P692104' },
-  14: { status: 'Stokta', qty: 1, barcode: 'P692105' },
-  15: { status: 'Stokta', qty: 1, barcode: 'P692106' },
-  16: { status: 'Siparişe Özel', qty: 0, barcode: 'SİPARİŞ-16' },
-  17: { status: 'Siparişe Özel', qty: 0, barcode: 'SİPARİŞ-17' },
-  18: { status: 'Stokta', qty: 1, barcode: 'P692118' },
-};
-
 export function ProductCardView({
   product,
   relatedProducts = [],
@@ -136,68 +124,83 @@ export function ProductCardView({
           ? 'Çap / Boy'
           : 'Yüzük Ölçüsü';
 
+  const findMatchingVariant = (opts: {
+    metalColor?: MetalColor;
+    purityCode?: PurityCode;
+    size?: number;
+    centerCarat?: number;
+  }) => {
+    const variants = product.variants ?? [];
+    if (variants.length === 0) return undefined;
+    const targetColor = canonicalizeMetalColor(opts.metalColor ?? product.metalColor);
+    const targetPurity = opts.purityCode ?? product.purityCode;
+    const targetSize = opts.size ?? product.variantSize;
+    return (
+      variants.find(
+        (v) =>
+          v.isActive !== false &&
+          canonicalizeMetalColor(v.metalColor) === targetColor &&
+          v.purityCode === targetPurity &&
+          (v.size === undefined || v.size === targetSize)
+      ) ??
+      variants.find(
+        (v) =>
+          v.isActive !== false &&
+          (opts.size !== undefined ? v.size === targetSize : true) &&
+          (opts.metalColor !== undefined ? canonicalizeMetalColor(v.metalColor) === targetColor : true) &&
+          (opts.purityCode !== undefined ? v.purityCode === targetPurity : true)
+      )
+    );
+  };
+
   const handleSizeSelect = (size: number) => {
-    const info = isRing
-      ? SIZE_STOCK_MAP[size] ?? { status: 'Siparişe Özel' as const, qty: 0, barcode: `SİPARİŞ-${size}` }
-      : { status: 'Stokta' as const, qty: Math.max(1, product.stockQty), barcode: `${product.barcode.slice(0, 5)}${size}` };
-    const weightDelta = isRing ? (size - product.variantSize) * 0.07 : (size - product.variantSize) * 0.04;
-    const nextWeight = Math.max(1.2, Number((product.grossWeightGram + weightDelta).toFixed(2)));
+    const matched = findMatchingVariant({ size });
     onUpdateProduct({
       variantSize: size,
-      stockStatus: info.status,
-      stockQty: info.qty,
-      barcode: info.barcode,
-      grossWeightGram: nextWeight,
+      ...(matched
+        ? {
+            stockQty: matched.stockQty,
+            stockStatus:
+              matched.stockQty > 0
+                ? 'Stokta'
+                : product.stockStatus === 'Siparişe Özel'
+                  ? 'Siparişe Özel'
+                  : 'Tükendi',
+            grossWeightGram: matched.grossWeightGram || product.grossWeightGram,
+          }
+        : {}),
     });
   };
 
   const handlePuritySelect = (purityCode: PurityCode) => {
-    const currentFactor =
-      product.purityCode === '18K'
-        ? 1.11
-        : product.purityCode === '22K'
-          ? 1.24
-          : product.purityCode === '8K'
-            ? 0.91
-            : 1;
-    const nextFactor =
-      purityCode === '18K' ? 1.11 : purityCode === '22K' ? 1.24 : purityCode === '8K' ? 0.91 : 1;
-    const nextWeight = Number(((product.grossWeightGram / currentFactor) * nextFactor).toFixed(2));
+    const matched = findMatchingVariant({ purityCode });
     onUpdateProduct({
       purityCode,
-      grossWeightGram: nextWeight,
-      description: `${formatTrNumber(computed.totalStoneCarat, 2)} Karat ${product.stoneColorGrade} Renk ${product.stoneClarity} Berraklık ${PURITY_MAP[purityCode].label.split(' ')[0]} Ayar ${product.metalColor} Altın ${product.subCategory}`,
+      ...(matched
+        ? {
+            stockQty: matched.stockQty,
+            grossWeightGram: matched.grossWeightGram || product.grossWeightGram,
+          }
+        : {}),
     });
   };
 
   const handleColorSelect = (metalColor: MetalColor) => {
-    const code = metalColor === 'Beyaz' ? 'BYZ' : metalColor === 'Sarı' ? 'SRY' : 'RSE';
+    const matched = findMatchingVariant({ metalColor });
     onUpdateProduct({
       metalColor,
-      galleryImages: [
-        `${product.parentSku}-${code}_main.jpg`,
-        `${product.parentSku}-${code}_model.jpg`,
-        `${product.parentSku}-${code}_side.jpg`,
-      ],
-      reelsVideoUrl: `${product.parentSku}-${code}_reels_9x16.mp4`,
-      spin360Url: `${product.parentSku}-${code}_360.mp4`,
-      catalogCleanImageUrl: `${product.parentSku}-${code}_clean_png.png`,
-      description: `${formatTrNumber(computed.totalStoneCarat, 2)} Karat ${product.stoneColorGrade} Renk ${product.stoneClarity} Berraklık ${product.purityCode.replace('K', '')} Ayar ${metalColor} Altın ${product.subCategory}`,
+      ...(matched
+        ? {
+            stockQty: matched.stockQty,
+            grossWeightGram: matched.grossWeightGram || product.grossWeightGram,
+          }
+        : {}),
     });
   };
 
   const handleCaratSelect = (centerCarat: number) => {
-    const total = Number((centerCarat + product.sideStoneCarat).toFixed(2));
-    const estStoneCost = Math.round(centerCarat * 800 + product.sideStoneCarat * 450);
     onUpdateProduct({
       centerStoneCarat: centerCarat,
-      p1StoneCostCurrency: estStoneCost,
-      ledger: {
-        ...product.ledger,
-        stoneFcPrice: estStoneCost,
-      },
-      title: `${total.toFixed(2)} Karat ${product.stoneType} ${product.subCategory.split('-')[1] ?? product.category} ${product.category}`,
-      description: `${total.toFixed(2)} Karat ${product.stoneColorGrade} Renk ${product.stoneClarity} Berraklık ${product.purityCode.replace('K', '')} Ayar ${product.metalColor} Altın ${product.subCategory}`,
     });
   };
 
@@ -629,7 +632,22 @@ export function ProductCardView({
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {(['Beyaz', 'Sarı', 'Rose'] as MetalColor[]).map((color) => {
+                {(() => {
+                  const variantColors = (product.variants ?? [])
+                    .filter((v) => v.isActive !== false && v.metalColor)
+                    .map((v) => canonicalizeMetalColor(v.metalColor));
+                  const configuredColors = (product.availableColors ?? []).map((c) =>
+                    canonicalizeMetalColor(c)
+                  );
+                  const colors = Array.from(
+                    new Set(
+                      [
+                        ...(variantColors.length > 0 ? variantColors : configuredColors),
+                        canonicalizeMetalColor(product.metalColor),
+                      ].filter(Boolean)
+                    )
+                  ) as MetalColor[];
+                  return colors.map((color) => {
                   const swatch =
                     color === 'Beyaz'
                       ? 'bg-gradient-to-br from-[#F4F3F1] to-[#CFCBC4]'
@@ -653,7 +671,8 @@ export function ProductCardView({
                       {color}
                     </button>
                   );
-                })}
+                  });
+                })()}
               </div>
             </div>
 
@@ -673,7 +692,14 @@ export function ProductCardView({
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {(['8K', '14K', '18K', '22K'] as PurityCode[]).map((code) => {
+                {(() => {
+                  const variantPurities = (product.variants ?? [])
+                    .filter((v) => v.isActive !== false && v.purityCode)
+                    .map((v) => v.purityCode);
+                  const purities = Array.from(
+                    new Set([...variantPurities, product.purityCode].filter(Boolean))
+                  ) as PurityCode[];
+                  return purities.map((code) => {
                   const active = product.purityCode === code;
                   return (
                     <button
@@ -689,11 +715,13 @@ export function ProductCardView({
                       {code}
                     </button>
                   );
-                })}
+                  });
+                })()}
               </div>
             </div>
 
             {/* Merkez Taş Karatı */}
+            {(computed.totalStoneCarat > 0 || Number(product.centerStoneCarat) > 0) && (
             <div>
               <div className="flex items-center justify-between text-xs mb-2">
                 <span className={`font-medium ${isB2c ? 'text-muted-foreground' : 'text-foreground'}`}>
@@ -707,11 +735,10 @@ export function ProductCardView({
                   </span>
                 </span>
               </div>
+              {Number(product.centerStoneCarat) > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {Array.from(
-                  new Set(
-                    [0.3, 0.5, 0.9, Number(product.centerStoneCarat) || 0].filter((v) => v > 0)
-                  )
+                  new Set([Number(product.centerStoneCarat) || 0].filter((v) => v > 0))
                 )
                   .sort((a, b) => a - b)
                   .map((centerCt) => {
@@ -733,9 +760,12 @@ export function ProductCardView({
                     );
                   })}
               </div>
+              )}
             </div>
+            )}
 
             {/* Ölçü / Boy (Rule M8: Bağımsız stok) */}
+            {(product.availableSizes.length > 0 || product.variantSize > 0) && (
             <div>
               <div className="flex items-center justify-between text-xs mb-2">
                 <span className={`font-medium ${isB2c ? 'text-muted-foreground' : 'text-foreground'}`}>
@@ -759,17 +789,18 @@ export function ProductCardView({
                   Ölçü Rehberi
                 </button>
               </div>
+              {product.availableSizes.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {product.availableSizes.map((size) => {
-                  const info = isRing ? SIZE_STOCK_MAP[size] : undefined;
-                  const isOut = isRing && info?.status === 'Tükendi';
+                  const matched = findMatchingVariant({ size });
+                  const isOut = matched ? matched.stockQty <= 0 && product.stockStatus !== 'Siparişe Özel' : false;
                   const isSelected = product.variantSize === size;
                   return (
                     <button
                       key={size}
                       type="button"
                       onClick={() => handleSizeSelect(size)}
-                      title={`${sizeUnitLabel} ${size}${info ? ` — ${info.status}` : ''}`}
+                      title={`${sizeUnitLabel} ${size}${matched ? ` — ${matched.stockQty > 0 ? 'Stokta' : 'Tükendi'}` : ''}`}
                       className={`min-w-[44px] min-h-[40px] px-2.5 py-2 text-xs font-mono rounded-[4px] border transition-colors tabular-nums cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                         isSelected
                           ? 'border-foreground bg-primary text-primary-foreground'
@@ -783,6 +814,7 @@ export function ProductCardView({
                   );
                 })}
               </div>
+              )}
               <p className={`text-[11px] mt-2 leading-relaxed ${isB2c ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
                 {product.stockStatus === 'Stokta'
                   ? 'Seçili ölçü stokta hazırdır — 1–2 iş günü içinde sigortalı kurye ile sevk edilir.'
@@ -791,6 +823,7 @@ export function ProductCardView({
                     : 'Seçili ölçü şu an tükendi. Farklı bir ölçü seçebilirsiniz.'}
               </p>
             </div>
+            )}
           </div>
 
           {/* Role-Specific Commerce Controls (B2C Personalization vs B2B Assortment/Supply) */}

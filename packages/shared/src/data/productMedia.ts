@@ -178,8 +178,13 @@ export function resolveProductMedia(
     };
   }
 
-  // Unknown SKU → SE009 registry (keeps demo catalog consistent)
-  return resolveProductMedia('SE009', tone);
+  return {
+    mainUrl: '',
+    hoverUrl: '',
+    hoverLabel: '',
+    binding: 'PARENT',
+    toneFilter: undefined,
+  };
 }
 
 export function isRenderableMediaUrl(url: string | undefined | null): boolean {
@@ -208,7 +213,8 @@ export function resolveProductThumbnail(product: ProductState): string {
  * and rich content blocks (Certificate Dossier + Technical Dimensions Blueprint).
  */
 export function resolveProductGallery(product: ProductState): ProductMediaItem[] {
-  const base = resolveProductMedia(product.parentSku, product.metalColor);
+  const isRegistryProduct = Boolean(MEDIA_REGISTRY[product.parentSku]);
+  const base = resolveProductMedia(product.parentSku, product.metalColor, product.galleryImages);
   const tone = canonicalizeMetalColor(product.metalColor);
   const code = tone === 'Beyaz' ? 'BYZ' : tone === 'Sarı' ? 'SRY' : 'RSE';
 
@@ -232,7 +238,7 @@ export function resolveProductGallery(product: ProductState): ProductMediaItem[]
         description: `${product.purityCode} ${product.metalColor} Altın ürün görseli`,
       });
     });
-  } else {
+  } else if (isRegistryProduct && base.mainUrl) {
     items.push(
       {
         id: `${product.parentSku}-${code}-main`,
@@ -282,24 +288,26 @@ export function resolveProductGallery(product: ProductState): ProductMediaItem[]
   }
 
   const posterPrimary = customPhotos[0] ?? base.mainUrl;
-  const posterSecondary = customPhotos[1] ?? base.hoverUrl;
+  const posterSecondary = customPhotos[1] ?? base.hoverUrl ?? posterPrimary;
 
-  items.push({
-    id: `${product.parentSku}-${code}-video-sparkle`,
-    kind: 'video',
-    role: 'VIDEO_DAYLIGHT_SPARKLE',
-    label: 'Gün Işığı Videosu',
-    aspectHint: '16:9',
-    url: `${product.parentSku}-${code}_daylight_16x9.mp4`,
-    posterUrl: posterPrimary,
-    durationSec: 12,
-    binding: 'RENK',
-    sortOrder: sortOrder++,
-    b2cVisible: true,
-    b2bVisible: true,
-    toneFilter: customPhotos.length > 0 ? undefined : base.toneFilter,
-    description: 'Doğal gün ışığında taş ateş ve parıltı hareketi (MP4 / HLS)',
-  });
+  if (isRegistryProduct && posterPrimary) {
+    items.push({
+      id: `${product.parentSku}-${code}-video-sparkle`,
+      kind: 'video',
+      role: 'VIDEO_DAYLIGHT_SPARKLE',
+      label: 'Gün Işığı Videosu',
+      aspectHint: '16:9',
+      url: `${product.parentSku}-${code}_daylight_16x9.mp4`,
+      posterUrl: posterPrimary,
+      durationSec: 12,
+      binding: 'RENK',
+      sortOrder: sortOrder++,
+      b2cVisible: true,
+      b2bVisible: true,
+      toneFilter: customPhotos.length > 0 ? undefined : base.toneFilter,
+      description: 'Doğal gün ışığında taş ateş ve parıltı hareketi (MP4 / HLS)',
+    });
+  }
 
   if (product.reelsVideoUrl && product.reelsVideoUrl.trim()) {
     items.push({
@@ -335,14 +343,14 @@ export function resolveProductGallery(product: ProductState): ProductMediaItem[]
     });
   }
 
-  if (product.hasCertificate || (product.certificateFileUrl && product.certificateFileUrl.trim())) {
+  if (product.certificateFileUrl && product.certificateFileUrl.trim()) {
     items.push({
       id: `${product.parentSku}-cert`,
       kind: 'document',
       role: 'CERTIFICATE_DOSSIER',
       label: `${product.certificateAgency || 'Sertifika'} Sertifika`,
       aspectHint: '4:3',
-      url: product.certificateFileUrl || `${product.parentSku}_certificate.pdf`,
+      url: product.certificateFileUrl.trim(),
       binding: 'VARYANT',
       sortOrder: sortOrder++,
       b2cVisible: true,
@@ -351,19 +359,21 @@ export function resolveProductGallery(product: ProductState): ProductMediaItem[]
     });
   }
 
-  items.push({
-    id: `${product.parentSku}-blueprint`,
-    kind: 'blueprint',
-    role: 'TECHNICAL_DIMENSIONS',
-    label: 'Ölçü & Mıhlama Şeması',
-    aspectHint: '4:3',
-    url: `${product.parentSku}_cad_spec.svg`,
-    binding: 'PARENT',
-    sortOrder: sortOrder++,
-    b2cVisible: true,
-    b2bVisible: true,
-    description: 'Milimetrik genişlik, et kalınlığı ve taç yüksekliği',
-  });
+  if (isRegistryProduct) {
+    items.push({
+      id: `${product.parentSku}-blueprint`,
+      kind: 'blueprint',
+      role: 'TECHNICAL_DIMENSIONS',
+      label: 'Ölçü & Mıhlama Şeması',
+      aspectHint: '4:3',
+      url: `${product.parentSku}_cad_spec.svg`,
+      binding: 'PARENT',
+      sortOrder: sortOrder++,
+      b2cVisible: true,
+      b2bVisible: true,
+      description: 'Milimetrik genişlik, et kalınlığı ve taç yüksekliği',
+    });
+  }
 
   return items;
 }

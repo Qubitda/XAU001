@@ -118,6 +118,28 @@ export function RingShowcase({
     return null;
   };
 
+  if (gallery.length === 0 || !activeItem) {
+    return (
+      <div
+        className={`overflow-hidden flex flex-col ${
+          lux ? 'bg-card border border-border rounded-[6px]' : 'bg-card border border-border rounded-lg'
+        }`}
+      >
+        <div className="aspect-[4/3] w-full flex flex-col items-center justify-center gap-3 bg-muted p-6 text-center">
+          <JewelryIllustration
+            visualType={product.visualType}
+            metalColor={product.metalColor}
+            stoneType={product.stoneType}
+            centerStoneCarat={product.centerStoneCarat}
+            sideStoneCarat={product.sideStoneCarat}
+            className="w-full max-w-[200px] h-auto opacity-80"
+          />
+          <p className="text-xs text-muted-foreground">Bu ürün için henüz görsel eklenmedi.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`overflow-hidden flex flex-col ${
