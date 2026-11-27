@@ -526,9 +526,9 @@ class OpsBankAccountDetailView(APIView):
             ctx.organization is None or row.organization_id != ctx.organization.id
         ):
             raise DomainError("Yetkisiz.", code="FORBIDDEN", status_code=403)
-        row.is_active = False
-        row.save(update_fields=["is_active", "updated_at"])
-        return envelope_response(serialize_bank_account(row), request)
+        deleted_id = str(row.id)
+        row.delete()
+        return envelope_response({"id": deleted_id, "deleted": True}, request)
 
 
 class OpsBankTransferApproveView(APIView):

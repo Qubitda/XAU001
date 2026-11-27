@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Mail, CreditCard, FileText, Send, Landmark, MessageSquare } from 'lucide-react';
+import {
+  CheckCircle2,
+  CreditCard,
+  EyeOff,
+  FileText,
+  Landmark,
+  Mail,
+  MessageSquare,
+  Pencil,
+  Send,
+  Trash2,
+} from 'lucide-react';
 import { PortalDataCard, PortalPageHeader } from '@taragold/shared/components/portal';
 import { Badge, Button, Input, Label, RichTextEditor } from '@taragold/shared/components/ui';
 import { apiFetch } from '@taragold/shared/lib/api/client';
@@ -119,6 +130,7 @@ export function OpsSettingsPage() {
 
   // Banks
   const [banks, setBanks] = useState<BankRow[]>([]);
+  const [editingBankId, setEditingBankId] = useState<string | null>(null);
   const [bankName, setBankName] = useState('');
   const [accountHolder, setAccountHolder] = useState('');
   const [iban, setIban] = useState('');
@@ -288,25 +300,92 @@ export function OpsSettingsPage() {
     setError(null);
     setOk(null);
     try {
-      await apiFetch('/api/v1/ops/payments/bank-accounts', {
-        method: 'POST',
-        body: {
-          bankName,
-          accountHolder,
-          iban,
-          branchCode,
-          currency: 'TRY',
-          isActive: true,
-        },
-      });
+      if (editingBankId) {
+        await apiFetch(`/api/v1/ops/payments/bank-accounts/${editingBankId}`, {
+          method: 'PATCH',
+          body: {
+            bankName,
+            accountHolder,
+            iban,
+            branchCode,
+          },
+        });
+        setOk('Banka hesabı güncellendi.');
+      } else {
+        await apiFetch('/api/v1/ops/payments/bank-accounts', {
+          method: 'POST',
+          body: {
+            bankName,
+            accountHolder,
+            iban,
+            branchCode,
+            currency: 'TRY',
+            isActive: true,
+          },
+        });
+        setOk('Banka hesabı eklendi.');
+      }
+      setEditingBankId(null);
       setBankName('');
       setAccountHolder('');
       setIban('');
       setBranchCode('');
-      setOk('Banka hesabı eklendi.');
       await loadBanks();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Banka kaydedilemedi');
+    }
+  };
+
+  const startEditBank = (b: BankRow & { branchCode?: string }) => {
+    setEditingBankId(b.id);
+    setBankName(b.bankName);
+    setAccountHolder(b.accountHolder);
+    setIban(b.iban);
+    setBranchCode(b.branchCode ?? '');
+    setError(null);
+    setOk(null);
+  };
+
+  const cancelEditBank = () => {
+    setEditingBankId(null);
+    setBankName('');
+    setAccountHolder('');
+    setIban('');
+    setBranchCode('');
+  };
+
+  const toggleBankActive = async (b: BankRow) => {
+    setError(null);
+    setOk(null);
+    try {
+      await apiFetch(`/api/v1/ops/payments/bank-accounts/${b.id}`, {
+        method: 'PATCH',
+        body: { isActive: !b.isActive },
+      });
+      setOk(!b.isActive ? `${b.bankName} yayına alındı.` : `${b.bankName} yayından kaldırıldı (pasif).`);
+      await loadBanks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Hesap durumu güncellenemedi');
+    }
+  };
+
+  const deleteBank = async (b: BankRow) => {
+    if (!window.confirm(`${b.bankName} (${b.iban}) hesabını kalıcı olarak silmek istiyor musunuz?`)) {
+      return;
+    }
+    setError(null);
+    setOk(null);
+    try {
+      await apiFetch(`/api/v1/ops/payments/bank-accounts/${b.id}`, {
+        method: 'DELETE',
+      });
+      if (editingBankId === b.id) {
+        cancelEditBank();
+      }
+      setOk('Banka hesabı silindi.');
+      await loadBanks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Banka hesabı silinemedi');
     }
   };
 
@@ -530,7 +609,10 @@ export function OpsSettingsPage() {
 
       {tab === 'banks' && (
         <div className="space-y-4">
-          <PortalDataCard title="Yeni Havale Hesabı" contentClassName="p-6 space-y-4">
+          <PortalDataCard
+            title={editingBankId ? 'Havale Hesabını Düzenle' : 'Yeni Havale Hesabı'}
+            contentClassName="p-6 space-y-4"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Banka Adı</Label>
@@ -549,16 +631,26 @@ export function OpsSettingsPage() {
                 <Input value={branchCode} onChange={(e) => setBranchCode(e.target.value)} />
               </div>
             </div>
-            <Button
-              type="button"
-              variant="success"
-              onClick={() => void saveBank()}
-              disabled={!bankName || !iban || !accountHolder}
-            >
-              Hesap Ekle
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="success"
+                onClick={() => void saveBank()}
+                disabled={!bankName || !iban || !accountHolder}
+              >
+                {editingBankId ? 'Değişiklikleri Kaydet' : 'Hesap Ekle'}
+              </Button>
+              {editingBankId && (
+                <Button type="button" variant="outline" onClick={cancelEditBank}>
+                  Vazgeç
+                </Button>
+              )}
+            </div>
           </PortalDataCard>
-          <PortalDataCard title={`Aktif Hesaplar (${banks.length})`} contentClassName="p-6 space-y-3">
+          <PortalDataCard
+            title={`Banka Hesapları (${banks.length} kayıt · ${banks.filter((b) => b.isActive).length} yayında)`}
+            contentClassName="p-6 space-y-3"
+          >
             {banks.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Henüz hesap yok. Havale siparişleri için en az bir platform hesabı ekleyin.
@@ -567,16 +659,70 @@ export function OpsSettingsPage() {
               banks.map((b) => (
                 <div
                   key={b.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3 text-xs"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3 text-xs"
                 >
-                  <div>
-                    <div className="font-medium">{b.bankName}</div>
-                    <div className="text-muted-foreground">{b.accountHolder}</div>
-                    <div className="font-mono mt-1">{b.iban}</div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-foreground">{b.bankName}</span>
+                      {b.isActive ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-[11px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          Yayında
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-700 font-medium text-[11px]">
+                          Yayında Değil (Pasif)
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground mt-0.5">{b.accountHolder}</div>
+                    <div className="font-mono mt-1 text-foreground">{b.iban}</div>
                   </div>
-                  <Badge variant={b.isActive ? 'secondary' : 'outline'}>
-                    {b.isActive ? 'Aktif' : 'Pasif'}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className={
+                        b.isActive
+                          ? 'h-8 text-xs text-amber-700 hover:text-amber-800'
+                          : 'h-8 text-xs text-emerald-700 hover:text-emerald-800'
+                      }
+                      onClick={() => void toggleBankActive(b)}
+                    >
+                      {b.isActive ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5" />
+                          Yayından Kaldır
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Yayınla
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => startEditBank(b)}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Düzenle
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs text-red-700 hover:text-red-800 hover:bg-red-50"
+                      onClick={() => void deleteBank(b)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Sil
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
