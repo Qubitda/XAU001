@@ -74,7 +74,7 @@ class OpsSmtpSettingsView(APIView):
 
     def get(self, request: Request):
         ctx = resolve_tenant_context(request)
-        qs = SmtpSetting.objects.select_related("organization").all()
+        qs = SmtpSetting.objects.select_related("organization").order_by("-is_active", "-updated_at")
         if not ctx.is_ops:
             if ctx.organization is None:
                 raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
@@ -91,8 +91,17 @@ class OpsSmtpSettingsView(APIView):
             if ctx.organization is None:
                 raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
             org_id = ctx.organization.id
-        if d.get("isActive") and org_id:
+        elif "organizationId" not in request.data:
+            org_id = None
+
+        existing = (
+            SmtpSetting.objects.filter(organization_id=org_id)
+            .order_by("-is_active", "-updated_at")
+            .first()
+        )
+        if d.get("isActive", True):
             SmtpSetting.objects.filter(organization_id=org_id, is_active=True).update(is_active=False)
+
         row = SmtpSetting(
             organization_id=org_id,
             host=d["host"],
@@ -105,6 +114,8 @@ class OpsSmtpSettingsView(APIView):
         )
         if d.get("password"):
             row.password_ciphertext = encrypt_secret(d["password"])
+        elif existing and existing.password_ciphertext:
+            row.password_ciphertext = existing.password_ciphertext
         row.save()
         return envelope_response(_ser_smtp(row), request, status=201)
 
