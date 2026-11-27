@@ -10,7 +10,7 @@ export function HeroBannerSlider() {
       className="relative w-full overflow-hidden bg-muted border-b border-border"
     >
       <div className="relative min-h-[500px] sm:min-h-[560px] lg:min-h-[640px] xl:min-h-[680px] flex items-center">
-        {/* Background Campaign Video */}
+        {/* Background Campaign Video (no overlay) */}
         <video
           src={heroCampaignVideo}
           autoPlay
@@ -20,12 +20,6 @@ export function HeroBannerSlider() {
           preload="auto"
           aria-hidden="true"
           className="absolute inset-0 w-full h-full object-cover object-[72%_22%] sm:object-[68%_24%] lg:object-[62%_25%]"
-        />
-
-        {/* Subtle Left-Edge White Transparent Gradient for Crisp Legibility */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-white/80 via-white/30 to-transparent sm:bg-gradient-to-r sm:from-white/80 sm:via-white/35 sm:via-45% sm:to-transparent"
         />
 
         {/* Hero Copy Overlay */}
