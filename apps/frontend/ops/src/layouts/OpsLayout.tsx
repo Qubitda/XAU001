@@ -112,7 +112,7 @@ const OPS_NAV_GROUPS = [
     group: 'Ayarlar',
     items: [
       { to: '/ops/ayarlar', label: 'Sistem Ayarları', icon: Settings2 },
-      { to: '/ops/ayarlar/kur-matrisi', label: 'Çapraz Kur & Değerli Metal Matrisi', icon: Globe },
+      { to: '/ops/ayarlar/kur-matrisi', label: 'Kur & Değerli Metal', icon: Globe },
       { to: '/ops/mail-loglari', label: 'Mail Logları', icon: Mail },
       { to: '/ops/tanimlar', label: 'Tanım Yönetimi', icon: BookMarked },
     ],
