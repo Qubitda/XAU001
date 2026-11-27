@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   CheckCircle2,
   CreditCard,
+  Eye,
   EyeOff,
   FileText,
   Landmark,
@@ -143,6 +144,9 @@ export function OpsSettingsPage() {
   const [encryption, setEncryption] = useState('TLS');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [showIyzicoApiKey, setShowIyzicoApiKey] = useState(false);
+  const [showIyzicoSecretKey, setShowIyzicoSecretKey] = useState(false);
   const [fromName, setFromName] = useState('Tara Gold');
   const [fromEmail, setFromEmail] = useState('');
   const [testTo, setTestTo] = useState('');
@@ -593,21 +597,43 @@ export function OpsSettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>API Key</Label>
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={provider?.hasApiKey ? '•••• (değiştirmek için yazın)' : 'sandbox-…'}
-              />
+              <div className="relative">
+                <Input
+                  type={showIyzicoApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={provider?.hasApiKey ? '•••• (değiştirmek için yazın)' : 'sandbox-…'}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowIyzicoApiKey((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                  aria-label={showIyzicoApiKey ? 'API Key gizle' : 'API Key göster'}
+                >
+                  {showIyzicoApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Secret Key</Label>
-              <Input
-                type="password"
-                value={secretKey}
-                onChange={(e) => setSecretKey(e.target.value)}
-                placeholder={provider?.hasSecretKey ? '•••• (değiştirmek için yazın)' : 'sandbox-…'}
-              />
+              <div className="relative">
+                <Input
+                  type={showIyzicoSecretKey ? 'text' : 'password'}
+                  value={secretKey}
+                  onChange={(e) => setSecretKey(e.target.value)}
+                  placeholder={provider?.hasSecretKey ? '•••• (değiştirmek için yazın)' : 'sandbox-…'}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowIyzicoSecretKey((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                  aria-label={showIyzicoSecretKey ? 'Secret Key gizle' : 'Secret Key göster'}
+                >
+                  {showIyzicoSecretKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Base URL</Label>
@@ -858,12 +884,23 @@ export function OpsSettingsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Şifre</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={smtp?.hasPassword ? '•••• (değiştirmek için yazın)' : ''}
-              />
+              <div className="relative">
+                <Input
+                  type={showSmtpPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={smtp?.hasPassword ? '•••• (değiştirmek için yazın)' : ''}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSmtpPassword((v) => !v)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                  aria-label={showSmtpPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                >
+                  {showSmtpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Gönderici Adı</Label>
