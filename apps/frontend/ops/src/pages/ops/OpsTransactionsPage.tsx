@@ -72,6 +72,9 @@ export function OpsTransactionsPage() {
   const [refundTxId, setRefundTxId] = useState<string | null>(null);
   const [refundAmount, setRefundAmount] = useState('');
   const [itemTxId, setItemTxId] = useState('');
+  const [refundIban, setRefundIban] = useState('');
+  const [refundHolder, setRefundHolder] = useState('');
+  const [refundReceipt, setRefundReceipt] = useState<File | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -117,10 +120,26 @@ export function OpsTransactionsPage() {
     const row = rows.find((r) => r.id === refundTxId);
     try {
       if (row?.provider === 'BANK_TRANSFER') {
-        await apiFetch(`/api/v1/ops/payments/transactions/${refundTxId}/manual-refund`, {
-          method: 'POST',
-          body: { amount: refundAmount || undefined },
-        });
+        if (refundReceipt) {
+          const form = new FormData();
+          if (refundAmount) form.append('amount', refundAmount);
+          if (refundIban.trim()) form.append('refundIban', refundIban.trim());
+          if (refundHolder.trim()) form.append('refundAccountHolder', refundHolder.trim());
+          form.append('receipt_file', refundReceipt);
+          await apiFetch(`/api/v1/ops/payments/transactions/${refundTxId}/manual-refund`, {
+            method: 'POST',
+            body: form,
+          });
+        } else {
+          await apiFetch(`/api/v1/ops/payments/transactions/${refundTxId}/manual-refund`, {
+            method: 'POST',
+            body: {
+              amount: refundAmount || undefined,
+              refundIban: refundIban.trim() || undefined,
+              refundAccountHolder: refundHolder.trim() || undefined,
+            },
+          });
+        }
       } else {
         await apiFetch(`/api/v1/ops/payments/transactions/${refundTxId}/refund`, {
           method: 'POST',
@@ -133,6 +152,9 @@ export function OpsTransactionsPage() {
       setRefundTxId(null);
       setRefundAmount('');
       setItemTxId('');
+      setRefundIban('');
+      setRefundHolder('');
+      setRefundReceipt(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'İade başarısız');
@@ -165,11 +187,12 @@ export function OpsTransactionsPage() {
   };
 
   const onRequestAction = async (id: string, action: 'APPROVE' | 'REJECT', useCancel = false) => {
+    const adminNote = window.prompt('Yönetici notu (opsiyonel)') ?? '';
     setError(null);
     try {
       await apiFetch(`/api/v1/ops/payments/refund-requests/${id}/action`, {
         method: 'POST',
-        body: { action, useCancel },
+        body: { action, useCancel, adminNote: adminNote.trim() || undefined },
       });
       await load();
     } catch (e) {
@@ -459,22 +482,49 @@ export function OpsTransactionsPage() {
         </Table>
       </PortalDataCard>
 
-      {refundTxId && (
+      {refundTxId && (() => {
+        const activeRow = rows.find((r) => r.id === refundTxId);
+        const isBank = activeRow?.provider === 'BANK_TRANSFER';
+        return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
           <div className="bg-card border border-border rounded-t-xl sm:rounded-lg shadow-lg w-full max-w-md p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold">Tam / Kısmi İade</h3>
+            <h3 className="text-lg font-semibold">
+              {isBank ? 'Manuel Havale İadesi' : 'Tam / Kısmi İade'}
+            </h3>
             <p className="text-xs text-muted-foreground">
-              iyzico Refund API onayı gelmeden veritabanı güncellenmez. Kırılımlı iade için
-              paymentTransactionId gerekir.
+              {isBank
+                ? 'Banka havalesi iadesi için tutar, iade IBAN, hesap sahibi ve opsiyonel iade dekontu girebilirsiniz.'
+                : 'iyzico Refund API onayı gelmeden veritabanı güncellenmez. Kırılımlı iade için paymentTransactionId gerekir.'}
             </p>
             <div className="space-y-1.5">
               <Label>Tutar</Label>
               <Input value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <Label>paymentTransactionId</Label>
-              <Input value={itemTxId} onChange={(e) => setItemTxId(e.target.value)} />
-            </div>
+            {isBank ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label>İade IBAN</Label>
+                  <Input value={refundIban} onChange={(e) => setRefundIban(e.target.value)} placeholder="TR..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Hesap Sahibi</Label>
+                  <Input value={refundHolder} onChange={(e) => setRefundHolder(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>İade Dekontu (Opsiyonel)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setRefundReceipt(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>paymentTransactionId</Label>
+                <Input value={itemTxId} onChange={(e) => setItemTxId(e.target.value)} />
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setRefundTxId(null)}>
                 Vazgeç
@@ -485,7 +535,8 @@ export function OpsTransactionsPage() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

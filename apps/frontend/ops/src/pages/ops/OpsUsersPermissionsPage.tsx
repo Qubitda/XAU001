@@ -32,7 +32,7 @@ import {
   useOpsRolesQuery,
   useOpsUsersQuery,
 } from '@taragold/shared/features/ops/hooks/useOpsQueries';
-import { ApiClientError } from '@taragold/shared/lib/api/client';
+import { apiFetch, ApiClientError } from '@taragold/shared/lib/api/client';
 
 export function OpsUsersPermissionsPage() {
   const { user } = useAuth();
@@ -201,7 +201,26 @@ export function OpsUsersPermissionsPage() {
                     <TableCell className="px-4 font-mono text-muted-foreground">
                       {row.lastLogin ? new Date(row.lastLogin).toLocaleString('tr-TR') : '—'}
                     </TableCell>
-                    <TableCell className="px-4 text-right">
+                    <TableCell className="px-4 text-right space-x-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={async () => {
+                          try {
+                            await apiFetch(`/api/v1/ops/users/${row.id}`, {
+                              method: 'PATCH',
+                              body: { isActive: !row.isActive },
+                            });
+                            toast.success(row.isActive ? 'Kullanıcı pasifleştirildi' : 'Kullanıcı aktifleştirildi');
+                            await usersQuery.refetch();
+                          } catch (e) {
+                            toast.error(e instanceof ApiClientError ? e.message : 'Güncellenemedi');
+                          }
+                        }}
+                      >
+                        {row.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                      </Button>
                       <Button
                         type="button"
                         size="sm"

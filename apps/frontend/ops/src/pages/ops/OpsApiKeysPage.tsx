@@ -31,6 +31,14 @@ type OrgOption = { id: string; name: string; code: string };
 type CreateResponse = ApiKeyRow & { key?: string; meta?: { note?: string } };
 
 const DEFAULT_SCOPES = ['storefront:read', 'storefront:write', 'market:read'] as const;
+const ALL_SCOPES = [
+  'storefront:read',
+  'storefront:write',
+  'market:read',
+  'b2b:read',
+  'b2b:write',
+  'integrations:b2c:write',
+] as const;
 
 export function OpsApiKeysPage() {
   const [rows, setRows] = useState<ApiKeyRow[]>([]);
@@ -38,6 +46,8 @@ export function OpsApiKeysPage() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
   const [organizationId, setOrganizationId] = useState('');
+  const [scopes, setScopes] = useState<string[]>([...DEFAULT_SCOPES]);
+  const [expiresAt, setExpiresAt] = useState('');
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -71,6 +81,10 @@ export function OpsApiKeysPage() {
     void load();
   }, [load]);
 
+  const toggleScope = (scope: string) => {
+    setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]));
+  };
+
   const onCreate = async () => {
     setError(null);
     setPlaintext(null);
@@ -81,11 +95,13 @@ export function OpsApiKeysPage() {
         body: {
           name,
           organizationId,
-          scopes: [...DEFAULT_SCOPES],
+          scopes,
+          ...(expiresAt ? { expiresAt: new Date(`${expiresAt}T23:59:59Z`).toISOString() } : {}),
         },
       });
       if (res.data?.key) setPlaintext(res.data.key);
       setName('');
+      setExpiresAt('');
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Oluşturulamadı');
@@ -136,42 +152,68 @@ export function OpsApiKeysPage() {
         </PortalDataCard>
       ) : null}
 
-      <PortalDataCard title="Yeni anahtar" contentClassName="p-4 flex flex-wrap gap-4 items-end">
-        <div className="space-y-1.5">
-          <Label htmlFor="api-key-name">Ad</Label>
-          <Input
-            id="api-key-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Partner storefront prod"
-            className="w-56"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="api-key-org">Firma</Label>
-          <select
-            id="api-key-org"
-            value={organizationId}
-            onChange={(e) => setOrganizationId(e.target.value)}
-            className="flex h-9 w-72 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      <PortalDataCard title="Yeni anahtar" contentClassName="p-4 space-y-3">
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="api-key-name">Ad</Label>
+            <Input
+              id="api-key-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Partner storefront prod"
+              className="w-56"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="api-key-org">Firma</Label>
+            <select
+              id="api-key-org"
+              value={organizationId}
+              onChange={(e) => setOrganizationId(e.target.value)}
+              className="flex h-9 w-72 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option value="">Firma seçin</option>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.code} — {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="api-key-exp">Son Geçerlilik (Opsiyonel)</Label>
+            <Input
+              id="api-key-exp"
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+              className="w-44"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="success"
+            onClick={() => void onCreate()}
+            disabled={!name.trim() || !organizationId.trim() || scopes.length === 0}
           >
-            <option value="">Firma seçin</option>
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.code} — {o.name}
-              </option>
-            ))}
-          </select>
+            <Plus className="w-4 h-4 mr-1" />
+            Oluştur
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="success"
-          onClick={() => void onCreate()}
-          disabled={!name.trim() || !organizationId.trim()}
-        >
-          <Plus className="w-4 h-4 mr-1" />
-          Oluştur
-        </Button>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {ALL_SCOPES.map((sc) => (
+            <Button
+              key={sc}
+              type="button"
+              size="sm"
+              variant={scopes.includes(sc) ? 'default' : 'outline'}
+              onClick={() => toggleScope(sc)}
+              className="text-xs font-mono h-7"
+            >
+              {sc}
+            </Button>
+          ))}
+        </div>
       </PortalDataCard>
 
       <PortalDataCard title="Kayıtlı anahtarlar">

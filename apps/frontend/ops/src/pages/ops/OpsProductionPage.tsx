@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Pencil, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalDataCard, PortalPageHeader } from '@taragold/shared/components/portal';
 import {
   Badge,
   Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Input,
+  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -22,7 +28,7 @@ import {
   useOpsWorkOrdersQuery,
   useUpdateOpsWorkOrderStatusMutation,
 } from '@taragold/shared/features/ops/hooks/useOpsQueries';
-import { ApiClientError } from '@taragold/shared/lib/api/client';
+import { apiFetch, ApiClientError } from '@taragold/shared/lib/api/client';
 
 const WO_STATUS_LABELS: Record<string, string> = {
   PLANNED: 'Planlandı',
@@ -38,6 +44,19 @@ export function OpsProductionPage() {
   const [status, setStatus] = useState<string>('all');
   const [page, setPage] = useState(1);
   const updateStatus = useUpdateOpsWorkOrderStatusMutation();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [sourceOrderNo, setSourceOrderNo] = useState('');
+  const [woSku, setWoSku] = useState('');
+  const [woSize, setWoSize] = useState('14');
+  const [woQty, setWoQty] = useState('1');
+  const [woNote, setWoNote] = useState('');
+  const [savingWo, setSavingWo] = useState(false);
+  const [editTarget, setEditTarget] = useState<{
+    workOrderNo: string;
+    size: string;
+    quantity: string;
+    note: string;
+  } | null>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -63,6 +82,54 @@ export function OpsProductionPage() {
       toast.success('İş emri durumu güncellendi');
     } catch (e) {
       toast.error(e instanceof ApiClientError ? e.message : 'Güncellenemedi');
+    }
+  };
+
+  const onCreateWorkOrder = async () => {
+    setSavingWo(true);
+    try {
+      await apiFetch('/api/v1/ops/work-orders', {
+        method: 'POST',
+        body: {
+          sourceOrderNo: sourceOrderNo.trim(),
+          sku: woSku.trim(),
+          size: Number(woSize) || 14,
+          quantity: Number(woQty) || 1,
+          engravingOrStampNote: woNote.trim(),
+        },
+      });
+      toast.success('İş emri oluşturuldu');
+      setCreateOpen(false);
+      setSourceOrderNo('');
+      setWoSku('');
+      setWoNote('');
+      await listQuery.refetch();
+    } catch (e) {
+      toast.error(e instanceof ApiClientError ? e.message : 'İş emri oluşturulamadı');
+    } finally {
+      setSavingWo(false);
+    }
+  };
+
+  const onSaveEditWorkOrder = async () => {
+    if (!editTarget) return;
+    setSavingWo(true);
+    try {
+      await apiFetch(`/api/v1/ops/work-orders/${encodeURIComponent(editTarget.workOrderNo)}`, {
+        method: 'PATCH',
+        body: {
+          size: Number(editTarget.size) || 14,
+          quantity: Number(editTarget.quantity) || 1,
+          engravingOrStampNote: editTarget.note.trim(),
+        },
+      });
+      toast.success('İş emri güncellendi');
+      setEditTarget(null);
+      await listQuery.refetch();
+    } catch (e) {
+      toast.error(e instanceof ApiClientError ? e.message : 'İş emri güncellenemedi');
+    } finally {
+      setSavingWo(false);
     }
   };
 
@@ -101,6 +168,10 @@ export function OpsProductionPage() {
                 className="h-9 pl-8 w-52 text-xs"
               />
             </div>
+            <Button size="sm" variant="success" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-3.5 h-3.5" />
+              Yeni İş Emri
+            </Button>
           </>
         }
       />
@@ -165,6 +236,21 @@ export function OpsProductionPage() {
                         {wo.engravingOrStampNote}
                       </Badge>
                     ) : null}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="ml-2 h-7 px-2"
+                      onClick={() =>
+                        setEditTarget({
+                          workOrderNo: wo.workOrderNo,
+                          size: String(wo.size),
+                          quantity: String(wo.quantity),
+                          note: wo.engravingOrStampNote || '',
+                        })
+                      }
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -192,6 +278,86 @@ export function OpsProductionPage() {
           </Button>
         </div>
       ) : null}
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Yeni İş Emri</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <Label>Kaynak Sipariş No</Label>
+              <Input value={sourceOrderNo} onChange={(e) => setSourceOrderNo(e.target.value)} placeholder="ORD-..." className="mt-1" />
+            </div>
+            <div>
+              <Label>Varyant SKU</Label>
+              <Input value={woSku} onChange={(e) => setWoSku(e.target.value)} placeholder="SE009-14K-BYZ-050" className="mt-1" />
+            </div>
+            <div>
+              <Label>Ölçü</Label>
+              <Input type="number" value={woSize} onChange={(e) => setWoSize(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label>Adet</Label>
+              <Input type="number" value={woQty} onChange={(e) => setWoQty(e.target.value)} className="mt-1" />
+            </div>
+            <div className="col-span-2">
+              <Label>Lazer Yazı / Damga Notu</Label>
+              <Input value={woNote} onChange={(e) => setWoNote(e.target.value)} className="mt-1" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Vazgeç</Button>
+            <Button disabled={savingWo || !sourceOrderNo.trim() || !woSku.trim()} onClick={() => void onCreateWorkOrder()}>
+              Oluştur
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(editTarget)} onOpenChange={(v) => !v && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>İş Emrini Düzenle ({editTarget?.workOrderNo})</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <Label>Ölçü</Label>
+                <Input
+                  type="number"
+                  value={editTarget.size}
+                  onChange={(e) => setEditTarget({ ...editTarget, size: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label>Adet</Label>
+                <Input
+                  type="number"
+                  value={editTarget.quantity}
+                  onChange={(e) => setEditTarget({ ...editTarget, quantity: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Lazer Yazı / Damga Notu</Label>
+                <Input
+                  value={editTarget.note}
+                  onChange={(e) => setEditTarget({ ...editTarget, note: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Vazgeç</Button>
+            <Button disabled={savingWo} onClick={() => void onSaveEditWorkOrder()}>
+              Kaydet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

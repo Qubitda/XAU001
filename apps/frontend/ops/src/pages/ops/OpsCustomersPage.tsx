@@ -39,7 +39,7 @@ import {
   useOpsCustomersQuery,
   usePatchOpsCustomerMutation,
 } from '@taragold/shared/features/ops/hooks/useOpsQueries';
-import { ApiClientError } from '@taragold/shared/lib/api/client';
+import { apiFetch, ApiClientError } from '@taragold/shared/lib/api/client';
 import { formatTrNumber } from '@taragold/shared/utils/pricingEngine';
 
 function errMsg(e: unknown) {
@@ -55,6 +55,26 @@ function CustomerDetail({ customerId, onBack }: { customerId: string; onBack: ()
   const deactivateMut = useDeactivateOpsCustomerMutation();
   const addrMut = useCreateCustomerAddressMutation();
   const c = detail.data;
+  const [customerCarts, setCustomerCarts] = useState<Array<{
+    id: string;
+    status: string;
+    checkoutState: string;
+    lineCount: number;
+    totalTry: string;
+    lastActivityAt?: string;
+  }>>([]);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch<typeof customerCarts>(`/api/v1/ops/customers/${customerId}/carts`)
+      .then((res) => {
+        if (active && Array.isArray(res.data)) setCustomerCarts(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [customerId]);
 
   const [form, setForm] = useState({
     fullName: '',
@@ -290,6 +310,27 @@ function CustomerDetail({ customerId, onBack }: { customerId: string; onBack: ()
                       {a.isDefault ? 'Varsayılan · ' : ''}
                       {a.isActive ? 'Aktif' : 'Pasif'}
                     </Badge>
+                    {a.isActive && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="ml-2 h-6 px-2 text-xs"
+                        onClick={async () => {
+                          try {
+                            await apiFetch(`/api/v1/ops/customers/${customerId}/addresses/${a.id}`, {
+                              method: 'DELETE',
+                            });
+                            toast.success('Adres pasifleştirildi');
+                            await detail.refetch();
+                          } catch (e) {
+                            toast.error(errMsg(e));
+                          }
+                        }}
+                      >
+                        Pasifleştir
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -304,7 +345,22 @@ function CustomerDetail({ customerId, onBack }: { customerId: string; onBack: ()
           </Table>
         </TabsContent>
 
-        <TabsContent value="orders" className="pt-3">
+        <TabsContent value="orders" className="pt-3 space-y-4">
+          {customerCarts.length > 0 && (
+            <div className="rounded-lg border border-border p-3 space-y-2">
+              <div className="text-xs font-semibold">Sepet Oturumları ({customerCarts.length})</div>
+              <div className="divide-y divide-border text-xs">
+                {customerCarts.map((cart) => (
+                  <div key={cart.id} className="py-1.5 flex items-center justify-between gap-2">
+                    <span className="font-mono">{cart.status} · {cart.checkoutState}</span>
+                    <span className="tabular-nums">
+                      {cart.lineCount} satır · {formatTrNumber(Number(cart.totalTry), 2)} TL
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <Table>
             <TableHeader>
               <TableRow>

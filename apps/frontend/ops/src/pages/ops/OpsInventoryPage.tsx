@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeftRight, ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, ChevronUp, Plus, Search, Warehouse } from 'lucide-react';
 import { toast } from 'sonner';
 import { PortalDataCard, PortalPageHeader } from '@taragold/shared/components/portal';
 import {
@@ -30,7 +30,7 @@ import {
   useOpsStocksQuery,
   useOpsWarehousesQuery,
 } from '@taragold/shared/features/ops/hooks/useOpsQueries';
-import { ApiClientError } from '@taragold/shared/lib/api/client';
+import { apiFetch, ApiClientError } from '@taragold/shared/lib/api/client';
 
 export function OpsInventoryPage() {
   const [q, setQ] = useState('');
@@ -44,6 +44,16 @@ export function OpsInventoryPage() {
   const [quantity, setQuantity] = useState('1');
   const [referenceNo, setReferenceNo] = useState('');
   const [movementsOpen, setMovementsOpen] = useState(false);
+  const [whOpen, setWhOpen] = useState(false);
+  const [whCode, setWhCode] = useState('');
+  const [whName, setWhName] = useState('');
+  const [mvOpen, setMvOpen] = useState(false);
+  const [mvSku, setMvSku] = useState('');
+  const [mvWhId, setMvWhId] = useState('');
+  const [mvType, setMvType] = useState('INBOUND');
+  const [mvQty, setMvQty] = useState('1');
+  const [mvRef, setMvRef] = useState('');
+  const [savingInv, setSavingInv] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -93,6 +103,50 @@ export function OpsInventoryPage() {
     }
   };
 
+  const onCreateWarehouse = async () => {
+    setSavingInv(true);
+    try {
+      await apiFetch('/api/v1/ops/warehouses', {
+        method: 'POST',
+        body: { code: whCode.trim().toUpperCase(), name: whName.trim(), isActive: true },
+      });
+      toast.success('Depo oluşturuldu');
+      setWhOpen(false);
+      setWhCode('');
+      setWhName('');
+      await warehousesQuery.refetch();
+    } catch (e) {
+      toast.error(e instanceof ApiClientError ? e.message : 'Depo oluşturulamadı');
+    } finally {
+      setSavingInv(false);
+    }
+  };
+
+  const onCreateMovement = async () => {
+    setSavingInv(true);
+    try {
+      await apiFetch('/api/v1/ops/stock-movements', {
+        method: 'POST',
+        body: {
+          variantSku: mvSku.trim(),
+          warehouseId: mvWhId,
+          movementType: mvType,
+          quantity: Number(mvQty) || 1,
+          referenceNo: mvRef.trim(),
+        },
+      });
+      toast.success('Stok hareketi kaydedildi');
+      setMvOpen(false);
+      setMvSku('');
+      setMvRef('');
+      await Promise.all([stocksQuery.refetch(), movementsQuery.refetch()]);
+    } catch (e) {
+      toast.error(e instanceof ApiClientError ? e.message : 'Stok hareketi başarısız');
+    } finally {
+      setSavingInv(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <PortalPageHeader
@@ -128,6 +182,14 @@ export function OpsInventoryPage() {
                 className="h-9 pl-8 w-52 text-xs"
               />
             </div>
+            <Button size="sm" variant="outline" onClick={() => setWhOpen(true)}>
+              <Warehouse className="w-3.5 h-3.5" />
+              Yeni Depo
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setMvOpen(true)}>
+              <Plus className="w-3.5 h-3.5" />
+              Stok Hareketi
+            </Button>
             <Button size="sm" variant="outline" onClick={() => setTransferOpen(true)}>
               <ArrowLeftRight className="w-3.5 h-3.5" />
               Depolar Arası Transfer
@@ -330,6 +392,92 @@ export function OpsInventoryPage() {
               onClick={() => void onTransfer()}
             >
               Transferi Uygula
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={whOpen} onOpenChange={setWhOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yeni Depo Oluştur</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="space-y-1.5">
+              <Label>Depo Kodu</Label>
+              <Input value={whCode} onChange={(e) => setWhCode(e.target.value)} placeholder="IST-MERKEZ" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Depo Adı</Label>
+              <Input value={whName} onChange={(e) => setWhName(e.target.value)} placeholder="İstanbul Merkez Kasa" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWhOpen(false)}>Vazgeç</Button>
+            <Button disabled={savingInv || !whCode.trim() || !whName.trim()} onClick={() => void onCreateWarehouse()}>
+              Oluştur
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={mvOpen} onOpenChange={setMvOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manuel Stok Hareketi</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="space-y-1.5">
+              <Label>Varyant SKU</Label>
+              <Input value={mvSku} onChange={(e) => setMvSku(e.target.value)} placeholder="SE009-14K-BYZ-050" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Depo</Label>
+              <Select value={mvWhId} onValueChange={setMvWhId}>
+                <SelectTrigger className="text-xs">
+                  <SelectValue placeholder="Depo seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((wh) => (
+                    <SelectItem key={wh.id} value={wh.id}>
+                      {wh.code} — {wh.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Hareket Tipi</Label>
+              <Select value={mvType} onValueChange={setMvType}>
+                <SelectTrigger className="text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INBOUND">Stok Girişi (INBOUND)</SelectItem>
+                  <SelectItem value="SHIP">Sevkiyat Çıkışı (SHIP)</SelectItem>
+                  <SelectItem value="RESERVE">Rezervasyon (RESERVE)</SelectItem>
+                  <SelectItem value="RELEASE">Rezervasyon İptali (RELEASE)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Adet</Label>
+                <Input type="number" value={mvQty} onChange={(e) => setMvQty(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Referans No</Label>
+                <Input value={mvRef} onChange={(e) => setMvRef(e.target.value)} placeholder="SAYIM-01" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMvOpen(false)}>Vazgeç</Button>
+            <Button
+              disabled={savingInv || !mvSku.trim() || !mvWhId || !mvRef.trim()}
+              onClick={() => void onCreateMovement()}
+            >
+              Kaydet
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -38,6 +38,7 @@ import { OpsSiteContactPage } from './pages/ops/OpsSiteContactPage';
 import { KatalogPage } from './pages/portal/KatalogPage';
 import { FiyatMotoruPage } from './pages/portal/FiyatMotoruPage';
 import { OrdersFeatureView } from '@taragold/shared/features/commerce/components/OrdersFeatureView';
+import { ProductCardFeatureView } from '@taragold/shared/features/catalog/components/ProductCardFeatureView';
 
 export function App() {
   return (
@@ -85,6 +86,17 @@ export function App() {
                   <Route path="ayarlar" element={<OpsSettingsPage />} />
                   <Route path="mail-loglari" element={<OpsMailLogsPage />} />
                   <Route path="tanimlar" element={<OpsDefinitionsPage />} />
+                  <Route path="urun/:parentSku" element={<ProductCardFeatureView />} />
+                </Route>
+                <Route
+                  path="/urun/:parentSku"
+                  element={
+                    <PortalRouteGuard portal="ops">
+                      <OpsLayout />
+                    </PortalRouteGuard>
+                  }
+                >
+                  <Route index element={<ProductCardFeatureView />} />
                 </Route>
                 <Route path="/katalog" element={<Navigate to="/ops/urunler" replace />} />
                 <Route path="/fiyat-motoru" element={<Navigate to="/ops/fiyat-motoru" replace />} />
