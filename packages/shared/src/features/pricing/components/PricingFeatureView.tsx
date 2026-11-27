@@ -6,7 +6,6 @@ import { PortalDataCard, PortalPageHeader } from '../../../components/portal';
 import { CapabilityGate, useAuth } from '../../../providers/AuthProvider';
 import {
   Button,
-  Input,
   Label,
   Select,
   SelectContent,
@@ -20,7 +19,7 @@ import {
   useUpdateProductMutation,
 } from '../../catalog/hooks/useCatalogQueries';
 import { apiFetch } from '../../../lib/api/client';
-import { computeJewelryMetrics, TROY_OZ_TO_GRAM } from '../../../utils/pricingEngine';
+import { computeJewelryMetrics } from '../../../utils/pricingEngine';
 import type { LiveRates, ProductState } from '../../../types/jewelry';
 
 type RecipeSnapshotInfo = {
@@ -53,11 +52,9 @@ export function PricingFeatureView() {
   const updateProductMutation = useUpdateProductMutation();
   const [recipeInfo, setRecipeInfo] = useState<RecipeSnapshotInfo | null>(null);
   const [localRates, setLocalRates] = useState<LiveRates | null>(null);
-  const [hasManualOverride, setHasManualOverride] = useState(false);
 
   useEffect(() => {
     setLocalRates(null);
-    setHasManualOverride(false);
     setRecipeInfo(null);
     if (!activeProduct?.parentSku) return;
     let active = true;
@@ -127,14 +124,7 @@ export function PricingFeatureView() {
       },
     };
     setLocalRates(nextRates);
-    setHasManualOverride(true);
     persistRecipeSnapshot(nextRates, true);
-  };
-
-  const handleResetFromCentralMatrix = () => {
-    setLocalRates(null);
-    setHasManualOverride(false);
-    persistRecipeSnapshot(rates, false);
   };
 
   if (isLoading) {
@@ -272,76 +262,6 @@ export function PricingFeatureView() {
       >
         {null}
       </CapabilityGate>
-
-      <PortalDataCard
-        title="Ürün Bazlı Kur / Metal Referansı (Merkezi Matristen Bağımsız)"
-        contentClassName="p-4 flex flex-wrap items-end gap-4 text-xs"
-        toolbar={
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground font-mono">
-              {hasManualOverride
-                ? 'Manuel Override (Yalnızca bu ürün)'
-                : recipeInfo?.sourceMatrixVersion
-                  ? `Merkezi Matris v${recipeInfo.sourceMatrixVersion}`
-                  : 'Aktif Merkezi Matris'}
-            </span>
-            <Button type="button" size="sm" variant="outline" onClick={handleResetFromCentralMatrix}>
-              <RefreshCw className="w-3 h-3 mr-1" />
-              Merkezi Matristen Al
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-1">
-          <Label className="text-[11px]">USD / TRY</Label>
-          <Input
-            type="number"
-            step="any"
-            className="h-8 w-28 font-mono text-right"
-            value={effectiveRates.fxBaseRates.USD ?? 42}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value) || 0;
-              handleUpdateRates({
-                liveUsdSell: v,
-                fxBaseRates: { ...effectiveRates.fxBaseRates, USD: v },
-              });
-            }}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-[11px]">EUR / TRY</Label>
-          <Input
-            type="number"
-            step="any"
-            className="h-8 w-28 font-mono text-right"
-            value={effectiveRates.fxBaseRates.EUR ?? 48.5}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value) || 0;
-              handleUpdateRates({
-                liveEurSell: v,
-                fxBaseRates: { ...effectiveRates.fxBaseRates, EUR: v },
-              });
-            }}
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-[11px]">Has Altın (TRY/gr)</Label>
-          <Input
-            type="number"
-            step="any"
-            className="h-8 w-32 font-mono text-right"
-            value={effectiveRates.liveHasGoldTrySell}
-            onChange={(e) => {
-              const hasTry = parseFloat(e.target.value) || 0;
-              const xauOz = Number((hasTry * TROY_OZ_TO_GRAM).toFixed(2));
-              handleUpdateRates({
-                liveHasGoldTrySell: hasTry,
-                fxBaseRates: { ...effectiveRates.fxBaseRates, XAU: xauOz },
-              });
-            }}
-          />
-        </div>
-      </PortalDataCard>
 
       <PricingEngineView
         product={product}
