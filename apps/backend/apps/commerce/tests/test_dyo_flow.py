@@ -275,7 +275,7 @@ class DyoCartGuardAndCheckoutTests(TestCase):
                 "customerEmail": "buyer@test.local",
                 "shippingCity": "İstanbul",
                 "shippingAddress": "Kapalıçarşı No:1",
-                "paymentMethod": "CREDIT_CARD",
+                "paymentMethod": "BANK_TRANSFER",
                 "acceptedCustomPolicy": True,
             },
         )

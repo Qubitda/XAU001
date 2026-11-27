@@ -6,7 +6,7 @@ from rest_framework.request import Request
 
 from apps.pricing.models import CostLine, PricingRecipe
 from apps.pricing.services import evaluate_recipe
-from apps.catalog.models import ProductMedia, ProductModel
+from apps.catalog.models import ProductMedia, ProductModel, SupplierOffer
 from apps.catalog.product_details import serialize_product_details
 from .common import (
     CARAT_Q,
@@ -15,6 +15,7 @@ from .common import (
     GRAM_Q,
     MONEY_Q,
     _dec_str,
+    _safe_detail,
     _serialize_mount,
     _serialize_variants,
     _stone_summary,
@@ -48,6 +49,23 @@ def _catalog_card_fields(
         if product.stock_qty <= 0 and product.stock_status != ProductModel.StockStatus.MADE_TO_ORDER
         else product.stock_status
     )
+    finished = _safe_detail(product, "finished_detail")
+    mounting = _safe_detail(product, "mounting_detail")
+    loose = _safe_detail(product, "loose_stone_detail")
+    metal_detail = finished or mounting
+
+    metal_name = (metal_detail.metal_name if metal_detail else "") or product.metal_name
+    purity_code = (metal_detail.purity_code if metal_detail else "") or product.purity_code
+    metal_color = (metal_detail.metal_color if metal_detail else "") or product.metal_color
+    stone_type = (loose.stone_category if loose else "") or product.stone_type
+    stone_clarity = (loose.clarity if loose else "") or product.stone_clarity
+    stone_color_grade = (loose.color if loose else "") or product.stone_color_grade
+    stone_cut_grade = (loose.cut_grade if loose else "") or product.stone_cut_grade
+    stone_cut_shape = (loose.shape if loose else "") or product.stone_cut_shape
+    setting_type = (mounting.setting_type_code if mounting else "") or product.setting_type
+    cert_agency = (loose.cert_lab if loose else "") or product.certificate_agency
+    cert_number = (loose.cert_number if loose else "") or product.certificate_number
+
     data = {
         "parentSku": product.parent_sku,
         "barcode": product.barcode,
@@ -62,27 +80,27 @@ def _catalog_card_fields(
         "styleTechnique": product.style_technique,
         "occasion": product.occasion,
         "ageGroup": product.age_group,
-        "metalName": product.metal_name,
-        "purityCode": product.purity_code,
-        "metalColor": product.metal_color,
-        "availableColors": product.available_colors or ([product.metal_color] if product.metal_color else []),
+        "metalName": metal_name,
+        "purityCode": purity_code,
+        "metalColor": metal_color,
+        "availableColors": product.available_colors or ([metal_color] if metal_color else []),
         "grossWeightGram": _dec_str(product.gross_weight_gram, GRAM_Q),
         "stockStatus": effective_stock_status,
         "leadTimeDays": product.lead_time_days,
-        "stoneType": product.stone_type,
+        "stoneType": stone_type,
         "stoneMeasureUnit": product.stone_measure_unit,
         "centerStoneCarat": _dec_str(center_carat, CARAT_Q),
         "sideStoneCarat": _dec_str(side_carat, CARAT_Q),
         "stoneCount": sum(s["count"] for s in stone_lines),
-        "stoneClarity": product.stone_clarity,
-        "stoneColorGrade": product.stone_color_grade,
-        "stoneCutGrade": product.stone_cut_grade,
-        "stoneCutShape": product.stone_cut_shape,
+        "stoneClarity": stone_clarity,
+        "stoneColorGrade": stone_color_grade,
+        "stoneCutGrade": stone_cut_grade,
+        "stoneCutShape": stone_cut_shape,
         "stoneOrigin": product.stone_origin,
-        "settingType": product.setting_type,
-        "hasCertificate": bool(product.certificate_agency),
-        "certificateAgency": product.certificate_agency,
-        "certificateNumber": product.certificate_number,
+        "settingType": setting_type,
+        "hasCertificate": bool(cert_agency and (cert_number or cert_url)),
+        "certificateAgency": cert_agency,
+        "certificateNumber": cert_number,
         "certificateFileUrl": cert_url,
         "mountSpec": _serialize_mount(product),
         "stoneLines": stone_lines,
@@ -112,10 +130,33 @@ def _catalog_card_fields(
                 "ownerOrganizationId": str(product.owner_organization_id) if product.owner_organization_id else None,
                 "erpCode": product.erp_code,
                 "stockQty": product.stock_qty,
-                "salesChannels": product.sales_channels or ["B2B", "B2B_API", "B2C_API"],
+                # Empty list = not published to any buyer sales channel
+                "salesChannels": product.sales_channels if product.sales_channels is not None else [],
             }
         )
     return data
+
+
+def _serialize_buyer_offers(product: ProductModel) -> list[dict]:
+    """Blind-pool anonymous offer cards for buyers (zero supplier identity/cost/exact qty)."""
+    prefetched = getattr(product, "approved_supplier_offers", None)
+    if prefetched is not None:
+        offers = prefetched
+    else:
+        offers = product.supplier_offers.filter(
+            status=SupplierOffer.Status.APPROVED,
+            is_active=True,
+            available_qty__gt=0,
+        )
+    return [
+        {
+            "offerRef": str(o.offer_ref),
+            "leadTimeDays": o.lead_time_days,
+            "inStock": o.available_qty > 0,
+            "variantId": str(o.variant_id) if o.variant_id else None,
+        }
+        for o in offers
+    ]
 
 
 def serialize_storefront_product(product: ProductModel, recipe: PricingRecipe | None, rates) -> dict:
@@ -125,9 +166,13 @@ def serialize_storefront_product(product: ProductModel, recipe: PricingRecipe | 
     """
     center_carat, side_carat, stone_lines = _stone_summary(product)
     data = _catalog_card_fields(product, center_carat, side_carat, stone_lines, for_ops=False)
-    variants = _serialize_variants(product, recipe, rates, audience="b2c")
+    variant_outputs: dict = {}
+    variants = _serialize_variants(product, recipe, rates, audience="b2c", variant_outputs=variant_outputs)
     default_v = next((v for v in product.variants.all() if v.is_active and v.is_default), None)
-    out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
+    if default_v is not None and default_v.id in variant_outputs:
+        out = variant_outputs[default_v.id]
+    else:
+        out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
     b2c_ch = out.resolve_channel("B2C") if out else None
 
     data["variants"] = variants
@@ -143,6 +188,7 @@ def serialize_storefront_product(product: ProductModel, recipe: PricingRecipe | 
         "fineMetalGram": _dec_str(out.fine_metal_gram, GRAM_Q) if out else "0.0000",
         "fineness": _dec_str(out.fineness, FINENESS_Q) if out else "0.585",
     }
+    data["offers"] = _serialize_buyer_offers(product)
     return data
 
 
@@ -153,9 +199,13 @@ def serialize_b2b_product(product: ProductModel, recipe: PricingRecipe | None, r
     """
     center_carat, side_carat, stone_lines = _stone_summary(product)
     data = _catalog_card_fields(product, center_carat, side_carat, stone_lines, for_ops=False)
-    variants = _serialize_variants(product, recipe, rates, audience="b2b")
+    variant_outputs: dict = {}
+    variants = _serialize_variants(product, recipe, rates, audience="b2b", variant_outputs=variant_outputs)
     default_v = next((v for v in product.variants.all() if v.is_active and v.is_default), None)
-    out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
+    if default_v is not None and default_v.id in variant_outputs:
+        out = variant_outputs[default_v.id]
+    else:
+        out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
     b2b_ch = out.resolve_channel("B2B") if out else None
 
     data["variants"] = variants
@@ -170,6 +220,7 @@ def serialize_b2b_product(product: ProductModel, recipe: PricingRecipe | None, r
         "fineMetalGram": _dec_str(out.fine_metal_gram, GRAM_Q) if out else "0.0000",
         "fineness": _dec_str(out.fineness, FINENESS_Q) if out else "0.585",
     }
+    data["offers"] = _serialize_buyer_offers(product)
     return data
 
 
@@ -180,8 +231,13 @@ def serialize_ops_product(product: ProductModel, recipe: PricingRecipe | None, r
     """
     center_carat, side_carat, stone_lines = _stone_summary(product)
     data = _catalog_card_fields(product, center_carat, side_carat, stone_lines, for_ops=True)
+    variant_outputs: dict = {}
+    ops_variants = _serialize_variants(product, recipe, rates, audience="ops", variant_outputs=variant_outputs)
     default_v = next((v for v in product.variants.all() if v.is_active and v.is_default), None)
-    out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
+    if default_v is not None and default_v.id in variant_outputs:
+        out = variant_outputs[default_v.id]
+    else:
+        out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
     data.update(
         {
             "supplierName": product.supplier_name,
@@ -191,7 +247,7 @@ def serialize_ops_product(product: ProductModel, recipe: PricingRecipe | None, r
             "pricingMode": recipe.pricing_mode if recipe else "1",
             "pricingCurrency": recipe.lc_currency if recipe else "TRY",
             "recipeId": str(recipe.id) if recipe else None,
-            "variants": _serialize_variants(product, recipe, rates, audience="ops"),
+            "variants": ops_variants,
             "metalSummary": {
                 "netMetalGram": _dec_str(out.net_metal_gram, GRAM_Q) if out else _dec_str(product.gross_weight_gram, GRAM_Q),
                 "fineMetalGram": _dec_str(out.fine_metal_gram, GRAM_Q) if out else "0.0000",
@@ -273,7 +329,25 @@ def _products_queryset():
             ),
             to_attr="published_recipes",
         ),
+        Prefetch(
+            "supplier_offers",
+            queryset=SupplierOffer.objects.filter(
+                status=SupplierOffer.Status.APPROVED,
+                is_active=True,
+                available_qty__gt=0,
+            ),
+            to_attr="approved_supplier_offers",
+        ),
     )
+
+
+def _channel_filter(qs, channel: str):
+    """Filter products to those explicitly enabled for the given sales channel (Postgres + SQLite safe)."""
+    from django.db import connection
+
+    if connection.vendor == "postgresql":
+        return qs.filter(sales_channels__contains=[channel])
+    return qs.filter(sales_channels__icontains=f'"{channel}"')
 
 
 def _apply_filters(qs, request: Request):
@@ -281,7 +355,7 @@ def _apply_filters(qs, request: Request):
     collection = request.query_params.get("collection")
     purity = request.query_params.get("purity")
     color = request.query_params.get("color")
-    q = request.query_params.get("q")
+    q = (request.query_params.get("q") or "").strip()[:64]
     if category:
         qs = qs.filter(category=category)
     if collection:
@@ -290,7 +364,7 @@ def _apply_filters(qs, request: Request):
         qs = qs.filter(Q(purity_code=purity) | Q(variants__purity_code=purity)).distinct()
     if color:
         qs = qs.filter(Q(metal_color=color) | Q(variants__metal_color=color)).distinct()
-    if q:
+    if len(q) >= 2:
         qs = qs.filter(
             Q(title__icontains=q)
             | Q(parent_sku__icontains=q)

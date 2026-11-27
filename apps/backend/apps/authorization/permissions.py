@@ -1,23 +1,52 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.views import APIView
-from .constants import OPS_ROLES, ROLE_PERMISSIONS
+
+from .constants import ALL_PERMISSIONS, B2B_ROLES, OPS_ROLES, ROLE_PERMISSIONS, SUPPLIER_ROLES
+
+if TYPE_CHECKING:
+    from apps.organizations.models import OrganizationMembership
 
 
-def resolve_membership_permissions(membership) -> list[str]:
+def resolve_membership_permissions(membership: "OrganizationMembership") -> list[str]:
+    """
+    Effective permissions = (role_permissions ∪ sanitized custom_permissions) − sanitized denied_permissions.
+    """
     from apps.common.security import sanitize_permissions
 
     base = set(ROLE_PERMISSIONS.get(membership.role_key, frozenset()))
-    base.update(sanitize_permissions(membership.custom_permissions))
+    base.update(sanitize_permissions(membership.custom_permissions, role_key=membership.role_key))
+    denied = set(sanitize_permissions(getattr(membership, "denied_permissions", None)))
+    base.difference_update(denied)
     return sorted(base)
+
+
+def _check_api_key(request: Request, view: APIView) -> bool:
+    """
+    Enforce explicit api_key_scopes opt-in whenever a request authenticates via ApiKeyAuthentication.
+    Returns True if no API key is present or if the key's scopes intersect view.api_key_scopes.
+    """
+    api_key = getattr(request, "api_key", None)
+    if api_key is None:
+        return True
+    allowed = getattr(view, "api_key_scopes", None)
+    if not allowed:
+        return False
+    key_scopes = set(api_key.scopes or [])
+    return bool(key_scopes.intersection(set(allowed)))
 
 
 class HasPortalPermission(BasePermission):
     """
-    Permission-based gate driven by active OrganizationMembership permissions.
+    Fail-closed permission gate driven by active OrganizationMembership permissions.
     Supports:
       - `required_permission = "pricing:edit"`
       - `required_permissions_by_method = {"GET": "users:read", "POST": "users:manage"}`
+      - `allow_any_authenticated = True` (explicit opt-in when no permission code is required)
       - `ops_only = True` (also enforces active OPS/SUPER_ADMIN membership)
     """
 
@@ -27,29 +56,24 @@ class HasPortalPermission(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        # API keys authenticate as created_by but must not inherit portal RBAC
-        # unless the view explicitly opts in via api_key_scopes.
-        api_key = getattr(request, "api_key", None)
-        if api_key is not None:
-            allowed = getattr(view, "api_key_scopes", None)
-            if not allowed:
-                return False
-            key_scopes = set(api_key.scopes or [])
-            if not key_scopes.intersection(set(allowed)):
-                return False
+        if not _check_api_key(request, view):
+            return False
 
         ctx = resolve_tenant_context(request)
         if getattr(view, "ops_only", False) and not ctx.is_ops:
             return False
 
         by_method = getattr(view, "required_permissions_by_method", None)
-        if isinstance(by_method, dict) and request.method in by_method:
-            required = by_method[request.method]
+        if isinstance(by_method, dict):
+            if request.method in by_method:
+                required = by_method[request.method]
+            else:
+                required = getattr(view, "required_permission", None)
         else:
             required = getattr(view, "required_permission", None)
 
         if required is None:
-            return True
+            return bool(getattr(view, "allow_any_authenticated", False))
         return required in ctx.permissions
 
 
@@ -58,6 +82,8 @@ class IsOpsUser(BasePermission):
         from apps.organizations.selectors import resolve_tenant_context
 
         if not request.user or not request.user.is_authenticated:
+            return False
+        if not _check_api_key(request, view):
             return False
         ctx = resolve_tenant_context(request)
         return ctx.is_ops
@@ -68,6 +94,8 @@ class IsSuperAdminUser(BasePermission):
         from apps.organizations.selectors import resolve_tenant_context
 
         if not request.user or not request.user.is_authenticated:
+            return False
+        if not _check_api_key(request, view):
             return False
         if request.user.is_superuser:
             return True
@@ -97,8 +125,11 @@ class IsB2bOrganizationMember(BasePermission):
 
 
 __all__ = [
+    "ALL_PERMISSIONS",
+    "B2B_ROLES",
     "OPS_ROLES",
     "ROLE_PERMISSIONS",
+    "SUPPLIER_ROLES",
     "resolve_membership_permissions",
     "HasPortalPermission",
     "IsOpsUser",

@@ -1,5 +1,7 @@
 from django.contrib import admin
-from apps.common.admin import OpsRestrictedAdminMixin
+from django.db import transaction
+
+from apps.common.admin import NoDeleteAdminMixin, OpsRestrictedAdminMixin
 from .models import (
     Favorite,
     FinishedDetail,
@@ -9,7 +11,9 @@ from .models import (
     ProductModel,
     ProductVariant,
     StoneLine,
+    SupplierOffer,
 )
+from .product_details import dual_write_product_details
 
 
 class StoneLineInline(admin.TabularInline):
@@ -87,6 +91,11 @@ class ProductModelAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
     readonly_fields = ("id", "stock_qty", "created_at", "updated_at")
     inlines = (StoneLineInline, ProductVariantInline, ProductMediaInline)
 
+    def save_model(self, request, obj, form, change):
+        with transaction.atomic():
+            super().save_model(request, obj, form, change)
+            dual_write_product_details(obj)
+
 
 @admin.register(ProductVariant)
 class ProductVariantAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
@@ -159,3 +168,25 @@ class FavoriteAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
     autocomplete_fields = ("user", "product")
     list_select_related = ("user", "product")
     readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(SupplierOffer)
+class SupplierOfferAdmin(NoDeleteAdminMixin, admin.ModelAdmin):
+    list_display = (
+        "product",
+        "variant",
+        "supplier_organization",
+        "offer_ref",
+        "cost_amount",
+        "currency",
+        "lead_time_days",
+        "available_qty",
+        "status",
+        "is_active",
+        "created_at",
+    )
+    list_filter = ("status", "is_active", "currency", "supplier_organization")
+    search_fields = ("product__parent_sku", "supplier_sku", "offer_ref", "supplier_organization__name")
+    autocomplete_fields = ("product", "variant", "supplier_organization", "reviewed_by")
+    list_select_related = ("product", "variant", "supplier_organization", "reviewed_by")
+    readonly_fields = ("id", "offer_ref", "reviewed_by", "reviewed_at", "created_at", "updated_at")

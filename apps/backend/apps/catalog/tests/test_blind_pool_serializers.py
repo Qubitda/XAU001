@@ -21,6 +21,10 @@ FORBIDDEN_BUYER_KEYS = {
     "salesChannels",
     "pricingBreakdown",
     "supplierName",
+    "supplierOrganizationId",
+    "supplierCode",
+    "supplierSku",
+    "costAmount",
     "warehouseLocation",
     "fireRatePct",
     "ledger",
@@ -101,6 +105,12 @@ def _mock_product(**overrides):
     type(product).finished_detail = property(lambda self: (_ for _ in ()).throw(Exception("no")))
     type(product).mounting_detail = property(lambda self: (_ for _ in ()).throw(Exception("no")))
     type(product).loose_stone_detail = property(lambda self: (_ for _ in ()).throw(Exception("no")))
+    mock_offer = MagicMock()
+    mock_offer.offer_ref = "22222222-2222-2222-2222-222222222222"
+    mock_offer.lead_time_days = 4
+    mock_offer.available_qty = 7
+    mock_offer.variant_id = None
+    product.approved_supplier_offers = [mock_offer]
     for k, v in overrides.items():
         setattr(product, k, v)
     return product
@@ -114,6 +124,9 @@ class BlindPoolSerializerTests(SimpleTestCase):
         self.assertNotIn("fireIncludedFineMetalGram", data.get("metalSummary", {}))
         self.assertIn("inStock", data)
         self.assertTrue(data["inStock"])
+        self.assertEqual(len(data["offers"]), 1)
+        offer_card = data["offers"][0]
+        self.assertEqual(set(offer_card.keys()), {"offerRef", "leadTimeDays", "inStock", "variantId"})
 
     def test_b2b_excludes_cost_and_fire_breakdown(self):
         data = serialize_b2b_product(_mock_product(), None, _mock_rates())
@@ -170,7 +183,7 @@ class BlindPoolSerializerTests(SimpleTestCase):
         self.assertNotIn("netCostUsd", pub_s)
         self.assertNotIn("supplierId", pub_s)
         ops_s = serialize_loose_stone_detail(stone, for_ops=True)
-        self.assertEqual(ops_s["netCostUsd"], 4000.0)
+        self.assertEqual(ops_s["netCostUsd"], "4000.00")
 
         mount = MagicMock()
         mount.metal_name = "Altın"

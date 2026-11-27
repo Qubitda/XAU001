@@ -7,7 +7,7 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 from apps.accounts.models import User
 from apps.audit.services import record_audit
-from apps.authorization.constants import ALL_PERMISSIONS
+from apps.authorization.constants import ALL_PERMISSIONS, B2B_ROLES, SUPPLIER_ROLES
 from apps.authorization.permissions import HasPortalPermission
 from apps.common.responses import (
     apply_safe_ordering,
@@ -15,7 +15,7 @@ from apps.common.responses import (
     paginated_envelope_response,
     parse_bool_param,
 )
-from apps.common.security import sanitize_permissions
+from apps.common.security import can_grant, sanitize_permissions
 from apps.organizations.selectors import resolve_tenant_context
 from config.exceptions import DomainError
 from .models import Branch, Organization, OrganizationMembership
@@ -57,7 +57,8 @@ def serialize_ops_membership(m: OrganizationMembership) -> dict:
             {"id": str(b.id), "code": b.code, "name": b.name, "city": b.city}
             for b in m.branches.all()
         ],
-        "customPermissions": sanitize_permissions(m.custom_permissions),
+        "customPermissions": sanitize_permissions(m.custom_permissions, role_key=m.role_key),
+        "deniedPermissions": sanitize_permissions(getattr(m, "denied_permissions", [])),
         "isActive": m.is_active,
         "createdAt": m.created_at.isoformat(),
         "updatedAt": m.updated_at.isoformat(),
@@ -83,6 +84,52 @@ class OpsBranchUpdateSerializer(serializers.Serializer):
     isActive = serializers.BooleanField(required=False)
 
 
+def _validate_permission_changes(
+    ctx,
+    *,
+    custom_permissions: list[str] | None,
+    denied_permissions: list[str] | None,
+    is_super_admin: bool,
+) -> None:
+    if not can_grant(ctx.permissions, custom_permissions, is_super_admin=is_super_admin) or not can_grant(
+        ctx.permissions, denied_permissions, is_super_admin=is_super_admin
+    ):
+        raise DomainError(
+            "Sahip olmadığınız bir izni başka bir kullanıcıya atayamaz veya kapatamazsınız.",
+            code="PRIVILEGE_ESCALATION_DENIED",
+            status_code=403,
+        )
+
+
+def _allowed_org_roles(ctx) -> frozenset[str]:
+    if ctx.role_key in SUPPLIER_ROLES:
+        return SUPPLIER_ROLES
+    if ctx.role_key in B2B_ROLES:
+        return B2B_ROLES
+    if ctx.is_ops and ctx.organization is not None:
+        if ctx.organization.org_type == Organization.OrgType.SUPPLIER:
+            return SUPPLIER_ROLES
+        return B2B_ROLES
+    return frozenset()
+
+
+class OrgMembershipCreateSerializer(serializers.Serializer):
+    userId = serializers.UUIDField(required=False)
+    email = serializers.EmailField(required=False)
+    roleKey = serializers.ChoiceField(choices=OrganizationMembership.RoleKey.values)
+    jobTitle = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
+    branchIds = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
+    defaultBranchId = serializers.UUIDField(required=False, allow_null=True)
+    customPermissions = serializers.ListField(child=serializers.ChoiceField(choices=ALL_PERMISSIONS), required=False, default=list)
+    deniedPermissions = serializers.ListField(child=serializers.ChoiceField(choices=ALL_PERMISSIONS), required=False, default=list)
+    isActive = serializers.BooleanField(default=True)
+
+    def validate(self, attrs: dict) -> dict:
+        if not attrs.get("userId") and not attrs.get("email"):
+            raise serializers.ValidationError("userId veya email alanlarından en az biri zorunludur.")
+        return attrs
+
+
 class OpsMembershipCreateSerializer(serializers.Serializer):
     userId = serializers.UUIDField()
     organizationId = serializers.UUIDField(required=False, allow_null=True)
@@ -91,6 +138,7 @@ class OpsMembershipCreateSerializer(serializers.Serializer):
     branchIds = serializers.ListField(child=serializers.UUIDField(), required=False, default=list)
     defaultBranchId = serializers.UUIDField(required=False, allow_null=True)
     customPermissions = serializers.ListField(child=serializers.ChoiceField(choices=ALL_PERMISSIONS), required=False, default=list)
+    deniedPermissions = serializers.ListField(child=serializers.ChoiceField(choices=ALL_PERMISSIONS), required=False, default=list)
     isActive = serializers.BooleanField(default=True)
 
 
@@ -100,6 +148,7 @@ class OpsMembershipUpdateSerializer(serializers.Serializer):
     branchIds = serializers.ListField(child=serializers.UUIDField(), required=False)
     defaultBranchId = serializers.UUIDField(required=False, allow_null=True)
     customPermissions = serializers.ListField(child=serializers.ChoiceField(choices=ALL_PERMISSIONS), required=False)
+    deniedPermissions = serializers.ListField(child=serializers.ChoiceField(choices=ALL_PERMISSIONS), required=False)
     isActive = serializers.BooleanField(required=False)
 
 
@@ -585,13 +634,24 @@ class OpsMembershipListCreateView(APIView):
             default_branch_id=d.get("defaultBranchId"),
         )
 
+        is_super = bool(request.user.is_superuser or ctx.role_key == OrganizationMembership.RoleKey.SUPER_ADMIN)
+        req_custom = d.get("customPermissions", [])
+        req_denied = d.get("deniedPermissions", [])
+        _validate_permission_changes(
+            ctx,
+            custom_permissions=req_custom,
+            denied_permissions=req_denied,
+            is_super_admin=is_super,
+        )
+
         membership = OrganizationMembership.objects.create(
             user=user,
             organization=org,
             role_key=d["roleKey"],
             job_title=(d.get("jobTitle") or "").strip(),
             default_branch=default_branch,
-            custom_permissions=sanitize_permissions(d.get("customPermissions", [])),
+            custom_permissions=sanitize_permissions(req_custom, role_key=d["roleKey"]),
+            denied_permissions=sanitize_permissions(req_denied),
             is_active=d.get("isActive", True),
         )
         if branches:
@@ -679,8 +739,20 @@ class OpsMembershipDetailView(APIView):
             m.role_key = d["roleKey"]
         if "jobTitle" in d:
             m.job_title = (d.get("jobTitle") or "").strip()
+        if "customPermissions" in d or "deniedPermissions" in d:
+            is_super = bool(request.user.is_superuser or ctx.role_key == OrganizationMembership.RoleKey.SUPER_ADMIN)
+            req_custom = d.get("customPermissions", [])
+            req_denied = d.get("deniedPermissions", [])
+            _validate_permission_changes(
+                ctx,
+                custom_permissions=req_custom,
+                denied_permissions=req_denied,
+                is_super_admin=is_super,
+            )
         if "customPermissions" in d:
-            m.custom_permissions = sanitize_permissions(d["customPermissions"])
+            m.custom_permissions = sanitize_permissions(d["customPermissions"], role_key=m.role_key)
+        if "deniedPermissions" in d:
+            m.denied_permissions = sanitize_permissions(d["deniedPermissions"])
         if "isActive" in d:
             m.is_active = d["isActive"]
 
@@ -749,5 +821,264 @@ class OpsMembershipDetailView(APIView):
             entity_id=str(m.id),
             actor=request.user,
             organization=m.organization,
+        )
+        return envelope_response({"id": str(m.id), "isActive": False, "deactivated": True}, request)
+
+
+class OrgMembershipListCreateView(APIView):
+    permission_classes = [HasPortalPermission]
+    required_permissions_by_method = {
+        "GET": "users:read",
+        "POST": "users:manage",
+    }
+
+    @extend_schema(tags=["Organization - Users"], summary="Kendi organizasyonundaki üyeleri listele")
+    def get(self, request: Request):
+        ctx = resolve_tenant_context(request, require_organization=True)
+        qs = (
+            OrganizationMembership.objects.select_related("user", "organization", "default_branch")
+            .prefetch_related("branches")
+            .filter(organization=ctx.organization)
+        )
+        role_key = (request.query_params.get("roleKey") or request.query_params.get("role_key") or "").strip()
+        if role_key:
+            qs = qs.filter(role_key=role_key)
+        is_active = parse_bool_param(request.query_params.get("isActive") or request.query_params.get("is_active"))
+        if is_active is not None:
+            qs = qs.filter(is_active=is_active)
+        qs = apply_safe_ordering(
+            qs,
+            request,
+            allowed_fields={"createdAt": "created_at", "roleKey": "role_key"},
+            default="-created_at",
+        )
+        return paginated_envelope_response(qs, request, serialize_ops_membership)
+
+    @extend_schema(
+        tags=["Organization - Users"],
+        summary="Kendi organizasyonuna yeni üye/rol ata",
+        request=OrgMembershipCreateSerializer,
+    )
+    @transaction.atomic
+    def post(self, request: Request):
+        ctx = resolve_tenant_context(request, require_organization=True)
+        serializer = OrgMembershipCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+
+        allowed_roles = _allowed_org_roles(ctx)
+        if d["roleKey"] not in allowed_roles:
+            raise DomainError(
+                "Bu rolü kendi organizasyonunuzda atama yetkiniz yok.",
+                code="PRIVILEGE_ESCALATION_DENIED",
+                status_code=403,
+            )
+
+        is_super = bool(request.user.is_superuser or ctx.role_key == OrganizationMembership.RoleKey.SUPER_ADMIN)
+        req_custom = d.get("customPermissions", [])
+        req_denied = d.get("deniedPermissions", [])
+        _validate_permission_changes(
+            ctx,
+            custom_permissions=req_custom,
+            denied_permissions=req_denied,
+            is_super_admin=is_super,
+        )
+
+        if d.get("userId"):
+            user = User.objects.filter(id=d["userId"]).first()
+        else:
+            user = User.objects.filter(email__iexact=d["email"].strip()).first()
+        if user is None:
+            raise DomainError("Kullanıcı bulunamadı.", code="USER_NOT_FOUND", status_code=404)
+
+        if OrganizationMembership.objects.filter(
+            user=user, organization=ctx.organization, role_key=d["roleKey"]
+        ).exists():
+            raise DomainError(
+                "Bu kullanıcı için aynı organizasyon ve rol üyeliği zaten mevcut.",
+                code="DUPLICATE_MEMBERSHIP",
+                status_code=409,
+            )
+
+        branches, default_branch = _validate_membership_branches(
+            org=ctx.organization,
+            branch_ids=d.get("branchIds", []),
+            default_branch_id=d.get("defaultBranchId"),
+        )
+        membership = OrganizationMembership.objects.create(
+            user=user,
+            organization=ctx.organization,
+            role_key=d["roleKey"],
+            job_title=(d.get("jobTitle") or "").strip(),
+            default_branch=default_branch,
+            custom_permissions=sanitize_permissions(req_custom, role_key=d["roleKey"]),
+            denied_permissions=sanitize_permissions(req_denied),
+            is_active=d.get("isActive", True),
+        )
+        if branches:
+            membership.branches.set(branches)
+
+        record_audit(
+            action="ORG_MEMBERSHIP_CREATED",
+            entity_type="OrganizationMembership",
+            entity_id=str(membership.id),
+            actor=request.user,
+            organization=ctx.organization,
+            metadata={"user_email": user.email, "role_key": membership.role_key},
+        )
+        membership = (
+            OrganizationMembership.objects.select_related("user", "organization", "default_branch")
+            .prefetch_related("branches")
+            .get(id=membership.id)
+        )
+        return envelope_response(serialize_ops_membership(membership), request, status=201)
+
+
+class OrgMembershipDetailView(APIView):
+    permission_classes = [HasPortalPermission]
+    required_permissions_by_method = {
+        "GET": "users:read",
+        "PATCH": "users:manage",
+        "DELETE": "users:manage",
+    }
+
+    def _get_scoped_membership(
+        self, request: Request, membership_id: str, *, for_update: bool = False
+    ) -> tuple:
+        ctx = resolve_tenant_context(request, require_organization=True)
+        qs = OrganizationMembership.objects.select_related("user", "organization", "default_branch").prefetch_related(
+            "branches"
+        )
+        if for_update:
+            qs = qs.select_for_update()
+        m = qs.filter(id=membership_id, organization=ctx.organization).first()
+        if m is None:
+            raise DomainError("Üyelik kaydı bulunamadı.", code="MEMBERSHIP_NOT_FOUND", status_code=404)
+        return ctx, m
+
+    @extend_schema(tags=["Organization - Users"], summary="Kendi organizasyonundaki üyelik detayını getir")
+    def get(self, request: Request, membership_id: str):
+        _, m = self._get_scoped_membership(request, membership_id)
+        return envelope_response(serialize_ops_membership(m), request)
+
+    @extend_schema(
+        tags=["Organization - Users"],
+        summary="Kendi organizasyonundaki üyeliği güncelle",
+        request=OpsMembershipUpdateSerializer,
+    )
+    @transaction.atomic
+    def patch(self, request: Request, membership_id: str):
+        ctx, m = self._get_scoped_membership(request, membership_id, for_update=True)
+        serializer = OpsMembershipUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+
+        if m.user_id == request.user.id and (
+            {"roleKey", "customPermissions", "deniedPermissions", "isActive"} & set(d.keys())
+        ):
+            raise DomainError(
+                "Kullanıcı kendi rol veya yetkilerini değiştiremez.",
+                code="SELF_PERMISSION_CHANGE_DENIED",
+                status_code=403,
+            )
+
+        allowed_roles = _allowed_org_roles(ctx)
+        if m.role_key not in allowed_roles or ("roleKey" in d and d["roleKey"] not in allowed_roles):
+            raise DomainError(
+                "Bu rol üzerinde işlem yapma yetkiniz yok.",
+                code="PRIVILEGE_ESCALATION_DENIED",
+                status_code=403,
+            )
+
+        is_super = bool(request.user.is_superuser or ctx.role_key == OrganizationMembership.RoleKey.SUPER_ADMIN)
+        if "customPermissions" in d or "deniedPermissions" in d:
+            _validate_permission_changes(
+                ctx,
+                custom_permissions=d.get("customPermissions", []),
+                denied_permissions=d.get("deniedPermissions", []),
+                is_super_admin=is_super,
+            )
+
+        if "roleKey" in d:
+            if (
+                OrganizationMembership.objects.filter(
+                    user=m.user, organization=ctx.organization, role_key=d["roleKey"]
+                )
+                .exclude(id=m.id)
+                .exists()
+            ):
+                raise DomainError("Bu kullanıcıda hedef rol zaten tanımlı.", code="DUPLICATE_MEMBERSHIP", status_code=409)
+            m.role_key = d["roleKey"]
+        if "jobTitle" in d:
+            m.job_title = (d.get("jobTitle") or "").strip()
+        if "customPermissions" in d:
+            m.custom_permissions = sanitize_permissions(d["customPermissions"], role_key=m.role_key)
+        if "deniedPermissions" in d:
+            m.denied_permissions = sanitize_permissions(d["deniedPermissions"])
+        if "isActive" in d:
+            m.is_active = d["isActive"]
+
+        if "branchIds" in d or "defaultBranchId" in d:
+            branch_ids = d.get("branchIds")
+            if "defaultBranchId" in d:
+                target_default_id = d["defaultBranchId"]
+            elif branch_ids is not None:
+                target_default_id = m.default_branch_id if m.default_branch_id in set(branch_ids) else None
+            else:
+                target_default_id = m.default_branch_id
+
+            branches, default_branch = _validate_membership_branches(
+                org=ctx.organization,
+                branch_ids=branch_ids,
+                default_branch_id=target_default_id,
+            )
+            if branch_ids is not None:
+                m.branches.set(branches)
+                m.default_branch = default_branch or (branches[0] if branches else None) if "defaultBranchId" not in d else default_branch
+            elif "defaultBranchId" in d:
+                m.default_branch = default_branch
+                if default_branch is not None:
+                    m.branches.add(default_branch)
+
+        m.save()
+        record_audit(
+            action="ORG_MEMBERSHIP_UPDATED",
+            entity_type="OrganizationMembership",
+            entity_id=str(m.id),
+            actor=request.user,
+            organization=ctx.organization,
+            metadata={"role_key": m.role_key, "is_active": m.is_active},
+        )
+        m = (
+            OrganizationMembership.objects.select_related("user", "organization", "default_branch")
+            .prefetch_related("branches")
+            .get(id=m.id)
+        )
+        return envelope_response(serialize_ops_membership(m), request)
+
+    @extend_schema(tags=["Organization - Users"], summary="Kendi organizasyonundaki üyeliği pasifleştir")
+    @transaction.atomic
+    def delete(self, request: Request, membership_id: str):
+        ctx, m = self._get_scoped_membership(request, membership_id, for_update=True)
+        if m.user_id == request.user.id:
+            raise DomainError(
+                "Kullanıcı kendi üyeliğini pasifleştiremez.",
+                code="SELF_PERMISSION_CHANGE_DENIED",
+                status_code=403,
+            )
+        if m.role_key not in _allowed_org_roles(ctx):
+            raise DomainError(
+                "Bu rol üzerinde işlem yapma yetkiniz yok.",
+                code="PRIVILEGE_ESCALATION_DENIED",
+                status_code=403,
+            )
+        m.is_active = False
+        m.save(update_fields=["is_active", "updated_at"])
+        record_audit(
+            action="ORG_MEMBERSHIP_DEACTIVATED",
+            entity_type="OrganizationMembership",
+            entity_id=str(m.id),
+            actor=request.user,
+            organization=ctx.organization,
         )
         return envelope_response({"id": str(m.id), "isActive": False, "deactivated": True}, request)

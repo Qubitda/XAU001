@@ -1,6 +1,6 @@
 from django.contrib import admin
-from apps.common.admin import ImmutableAdminMixin
-from .models import RateSnapshot
+from apps.common.admin import ImmutableAdminMixin, OpsRestrictedAdminMixin, ReadOnlyInlineMixin
+from .models import ExchangeMetalMatrix, ExchangeMetalRate, RateSnapshot
 
 
 @admin.register(RateSnapshot)
@@ -29,3 +29,24 @@ class RateSnapshotAdmin(ImmutableAdminMixin, admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+
+class ExchangeMetalRateInline(ReadOnlyInlineMixin, admin.TabularInline):
+    model = ExchangeMetalRate
+    fields = ("currency_code", "base_value_try", "unit", "precision")
+    readonly_fields = fields
+
+
+@admin.register(ExchangeMetalMatrix)
+class ExchangeMetalMatrixAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("version", "organization", "status", "effective_at", "created_at")
+    list_filter = ("status",)
+    search_fields = ("note", "organization__code")
+    inlines = (ExchangeMetalRateInline,)
+
+
+@admin.register(ExchangeMetalRate)
+class ExchangeMetalRateAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("matrix", "currency_code", "base_value_try", "unit", "precision")
+    list_filter = ("unit",)
+    search_fields = ("currency_code",)

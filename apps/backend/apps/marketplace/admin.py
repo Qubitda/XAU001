@@ -147,3 +147,9 @@ class SettlementAdmin(ImmutableAdminMixin, admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+
+@admin.register(BuyRequestLine)
+class BuyRequestLineAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("request", "product", "variant", "qty", "target_unit_price", "currency")
+    search_fields = ("request__title", "product__parent_sku", "variant__sku")

@@ -9,6 +9,7 @@ from .models import (
     OrganizationBankAccount,
     OrganizationDocument,
     OrganizationMembership,
+    SiteContactSettings,
 )
 
 
@@ -181,3 +182,9 @@ class OrganizationDocumentAdmin(NoDeleteAdminMixin, admin.ModelAdmin):
     list_display = ("name", "organization", "doc_type", "is_active", "created_at")
     list_filter = ("doc_type", "is_active")
     search_fields = ("name", "organization__code")
+
+
+@admin.register(SiteContactSettings)
+class SiteContactSettingsAdmin(admin.ModelAdmin):
+    list_display = ("singleton_key", "company_name", "phone", "whatsapp", "email", "updated_at")
+    search_fields = ("singleton_key", "company_name", "phone", "email")

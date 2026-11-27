@@ -1,41 +1,71 @@
 """Storefront (B2C) product and favorites endpoints."""
-from django.db.models import Q
+import hashlib
+
+from django.core.cache import cache
+from django.db.models import Exists, OuterRef, Q
 from rest_framework import permissions
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.api_keys.permissions import HasApiScopeRead, HasApiScopeWrite
-from apps.common.responses import envelope_response
+from apps.common.responses import apply_safe_ordering, envelope_response, paginated_envelope_response
 from apps.market.services import get_current_rate_snapshot
 from apps.organizations.selectors import resolve_tenant_context
+from apps.pricing.models import PricingRecipe
 from config.exceptions import DomainError
 from apps.catalog.models import Favorite, ProductModel
 from .serializers import (
     _apply_filters,
+    _channel_filter,
     _products_queryset,
     serialize_storefront_product,
 )
+
+CATALOG_ORDER_FIELDS = {"createdAt": "created_at", "title": "title", "parentSku": "parent_sku"}
+
 
 class StorefrontProductListView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request: Request):
         rates = get_current_rate_snapshot()
-        # Storefront shows central platform catalog only — ACTIVE + published recipe required
+        is_anon = not (request.user and request.user.is_authenticated)
+        cache_key = ""
+        if is_anon:
+            q_hash = hashlib.sha256(request.META.get("QUERY_STRING", "").encode("utf-8")).hexdigest()[:24]
+            cache_key = f"sf_products:{rates.snapshot_code}:B2C_API:{q_hash}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
+        has_published = Exists(
+            PricingRecipe.objects.filter(product=OuterRef("pk"), status=PricingRecipe.Status.PUBLISHED)
+        )
         qs = _apply_filters(
-            _products_queryset().filter(
-                owner_organization__isnull=True,
-                catalog_status=ProductModel.CatalogStatus.ACTIVE,
+            _channel_filter(
+                _products_queryset()
+                .filter(
+                    owner_organization__isnull=True,
+                    catalog_status=ProductModel.CatalogStatus.ACTIVE,
+                )
+                .filter(has_published),
+                "B2C_API",
             ),
             request,
         )
-        payload = [
-            serialize_storefront_product(p, p.published_recipes[0] if p.published_recipes else None, rates)
-            for p in qs
-            if p.published_recipes
-        ]
-        return envelope_response(payload, request)
+        qs = apply_safe_ordering(qs, request, allowed_fields=CATALOG_ORDER_FIELDS, default="-created_at")
+        resp = paginated_envelope_response(
+            qs,
+            request,
+            lambda p: serialize_storefront_product(p, p.published_recipes[0], rates),
+            default_page_size=24,
+            max_page_size=100,
+        )
+        if is_anon and cache_key:
+            cache.set(cache_key, resp.data, timeout=60)
+        return resp
 
 
 class StorefrontProductDetailView(APIView):
@@ -44,11 +74,13 @@ class StorefrontProductDetailView(APIView):
     def get(self, request: Request, parent_sku: str):
         rates = get_current_rate_snapshot()
         product = (
-            _products_queryset()
-            .filter(
-                owner_organization__isnull=True,
-                catalog_status=ProductModel.CatalogStatus.ACTIVE,
-                parent_sku=parent_sku,
+            _channel_filter(
+                _products_queryset().filter(
+                    owner_organization__isnull=True,
+                    catalog_status=ProductModel.CatalogStatus.ACTIVE,
+                    parent_sku=parent_sku,
+                ),
+                "B2C_API",
             )
             .first()
         )
@@ -81,9 +113,13 @@ class FavoriteToggleView(APIView):
         )
         if not ctx.is_ops:
             if ctx.organization is not None:
-                qs = qs.filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
+                ch = "B2B_API" if getattr(request, "api_key", None) is not None else "B2B"
+                qs = _channel_filter(
+                    qs.filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization)),
+                    ch,
+                )
             else:
-                qs = qs.filter(owner_organization__isnull=True)
+                qs = _channel_filter(qs.filter(owner_organization__isnull=True), "B2C_API")
         product = qs.first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {sku}", code="PRODUCT_NOT_FOUND", status_code=404)

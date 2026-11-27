@@ -367,6 +367,14 @@ def add_b2c_cart_item(*, user, payload: dict) -> B2cCartItem:
         )
         return existing
 
+    loose = getattr(product, "loose_stone_detail", None) if hasattr(product, "loose_stone_detail") else None
+    cert_agency = (loose.cert_lab if loose else "") or product.certificate_agency
+    cert_number = (loose.cert_number if loose else "") or product.certificate_number
+    cert_label = (
+        f"{cert_agency} · {cert_number}"
+        if cert_number
+        else (f"{cert_agency} Sertifikalı" if cert_agency else "")
+    )
     item = B2cCartItem.objects.create(
         user=user,
         variant=resolved_variant,
@@ -382,7 +390,7 @@ def add_b2c_cart_item(*, user, payload: dict) -> B2cCartItem:
         engraving_text=engraving_text,
         gift_wrap=gift_wrap,
         gift_note=gift_note,
-        certificate_label=f"{product.certificate_agency} · {product.certificate_number}" if product.certificate_number else f"{product.certificate_agency} Sertifikalı",
+        certificate_label=cert_label,
         stock_status=variant_stock_status,
         lead_time_text=lead_time,
         gross_weight_gram=gross_gram,
@@ -651,11 +659,26 @@ def submit_b2c_order(*, user, payload: dict, awaiting_payment: bool = False) -> 
     subtotal_final = _q2(sum((item.unit_final_price_try * item.qty for item in cart_items), Decimal("0.00")))
     campaign_discount = _q2(max(Decimal("0.00"), subtotal_list - subtotal_final))
 
+    social_discount = Decimal("0.00")
+    if payload.get("campaignCode") or payload.get("utmCampaign") or payload.get("affiliateCode"):
+        from apps.social_commerce.services import resolve_social_checkout_discount
+
+        social_disc = resolve_social_checkout_discount(
+            subtotal_final_try=subtotal_final,
+            campaign_code=str(payload.get("campaignCode") or payload.get("utmCampaign") or ""),
+            affiliate_code=str(payload.get("affiliateCode") or ""),
+            audience="B2C",
+            now=now,
+        )
+        social_discount = _q2(social_disc["discountTry"])
+        campaign_discount = _q2(campaign_discount + social_discount)
+
+    discounted_subtotal = _q2(max(Decimal("0.00"), subtotal_final - social_discount))
     transfer_discount = (
-        _q2(subtotal_final * BANK_TRANSFER_DISCOUNT_RATE) if payment_method == "BANK_TRANSFER" else Decimal("0.00")
+        _q2(discounted_subtotal * BANK_TRANSFER_DISCOUNT_RATE) if payment_method == "BANK_TRANSFER" else Decimal("0.00")
     )
     insured_shipping = Decimal("0.00")
-    grand_total = _q2(max(Decimal("0.00"), subtotal_final - transfer_discount + insured_shipping))
+    grand_total = _q2(max(Decimal("0.00"), discounted_subtotal - transfer_discount + insured_shipping))
     vat_included = _q2(grand_total - (grand_total / VAT_DIVISOR))
 
     order_no = f"TG-B2C-{now.year}-{uuid.uuid4().hex[:6].upper()}"
@@ -823,7 +846,40 @@ def submit_b2c_order(*, user, payload: dict, awaiting_payment: bool = False) -> 
     )
     if not awaiting_payment:
         _schedule_b2c_order_created_webhook(order)
+        _record_social_commerce_order_hooks(order=order, payload=payload)
     return order
+
+
+def _record_social_commerce_order_hooks(*, order: B2cOrder, payload: dict) -> None:
+    """Non-blocking social attribution & affiliate conversion recording for confirmed B2C orders."""
+    try:
+        from apps.social_commerce.services import (
+            record_affiliate_conversion,
+            record_verified_order_attribution,
+        )
+
+        record_verified_order_attribution(
+            order_no=order.order_no,
+            revenue_try=order.grand_total_try,
+            customer=order.customer,
+            session_key=str(payload.get("sessionKey") or ""),
+            platform=str(payload.get("utmPlatform") or payload.get("utmSource") or ""),
+            utm_source=str(payload.get("utmSource") or ""),
+            utm_medium=str(payload.get("utmMedium") or ""),
+            utm_campaign=str(payload.get("utmCampaign") or ""),
+            audience="B2C",
+        )
+        aff_code = str(payload.get("affiliateCode") or "").strip()
+        if aff_code:
+            record_affiliate_conversion(
+                code_str=aff_code,
+                order_no=order.order_no,
+                gross_amount_try=order.subtotal_list_try,
+                net_amount_try=order.grand_total_try,
+                audience="B2C",
+            )
+    except Exception:
+        logger.exception("social_commerce order hook failed order=%s", order.order_no)
 
 
 @transaction.atomic
@@ -850,6 +906,7 @@ def finalize_b2c_order_after_payment(*, order: B2cOrder, actor=None) -> B2cOrder
     )
     _schedule_b2c_order_created_webhook(order)
     _emit_b2c_payment_success_mail(order)
+    _record_social_commerce_order_hooks(order=order, payload={})
     return order
 
 
@@ -1180,6 +1237,12 @@ def transition_b2c_order_status(*, order_no: str, next_status: str, actor=None) 
     order.save(update_fields=["status", "updated_at"])
 
     if next_status in (B2cOrder.Status.CANCELLED, B2cOrder.Status.REFUNDED):
+        try:
+            from apps.social_commerce.services import mark_affiliate_conversion_refunded
+
+            mark_affiliate_conversion_refunded(order.order_no)
+        except Exception:
+            logger.exception("social_commerce refund hook failed order=%s", order.order_no)
         released_variant_ids: set = set()
         for item in order.items.all():
             if item.variant is not None:

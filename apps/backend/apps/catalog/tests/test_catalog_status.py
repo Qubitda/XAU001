@@ -17,6 +17,7 @@ class CatalogStatusFilterTests(TestCase):
             metal_color="Beyaz",
             seo_slug="act-001",
             catalog_status=ProductModel.CatalogStatus.ACTIVE,
+            sales_channels=["B2C_API"],
             available_colors=["Beyaz"],
             available_sizes=[14],
         )

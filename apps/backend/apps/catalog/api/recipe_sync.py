@@ -91,16 +91,20 @@ def _sync_recipe_from_ledger(*, product: ProductModel, pricing_mode: str | None,
         recipe.save()
 
         def _upsert_cost(lt: str, cur_key: str, price_key: str | None, rate_key: str, manual_key: str | None = None):
-            defaults: dict = {
-                "fc_currency": str(ledger.get(cur_key, "USD")).upper()[:8],
-                "rate_override": Decimal(str(ledger[rate_key])) if ledger.get(rate_key) is not None else None,
-            }
-            if price_key is not None:
-                defaults["fc_price"] = Decimal(str(ledger.get(price_key, 0) or 0))
-            if manual_key is not None:
-                defaults["fc_price_manual"] = (
-                    Decimal(str(ledger[manual_key])) if ledger.get(manual_key) is not None else None
-                )
+            defaults: dict = {}
+            if cur_key in ledger:
+                defaults["fc_currency"] = str(ledger[cur_key]).upper()[:8]
+            if rate_key in ledger:
+                defaults["rate_override"] = ledger[rate_key]
+            if price_key is not None and price_key in ledger:
+                defaults["fc_price"] = ledger[price_key] if ledger[price_key] is not None else Decimal("0")
+            if manual_key is not None and manual_key in ledger:
+                defaults["fc_price_manual"] = ledger[manual_key]
+            if not defaults:
+                return
+            existing = CostLine.objects.filter(recipe=recipe, line_type=lt).first()
+            if existing is None and "fc_currency" not in defaults:
+                defaults["fc_currency"] = "USD"
             CostLine.objects.update_or_create(recipe=recipe, line_type=lt, defaults=defaults)
 
         _upsert_cost(CostLine.LineType.MADEN, "metalCurrency", None, "metalRateOverride", "metalFcManual")
@@ -128,14 +132,13 @@ def _sync_recipe_from_ledger(*, product: ProductModel, pricing_mode: str | None,
                     recipe=recipe,
                     channel=ch,
                     profit_unit=str(profit.get("unit", "%"))[:8],
-                    profit_value=Decimal(str(profit.get("value", 0) or 0)),
+                    profit_value=profit.get("value") if profit.get("value") is not None else Decimal("0"),
                     discount_unit=str(discount.get("unit", "%"))[:8],
-                    discount_value=Decimal(str(discount.get("value", 0) or 0)),
+                    discount_value=discount.get("value") if discount.get("value") is not None else Decimal("0"),
                     servis_bedeli_unit=str(fee.get("unit", "%"))[:8],
-                    servis_bedeli_value=Decimal(str(fee.get("value", 0) or 0)),
+                    servis_bedeli_value=fee.get("value") if fee.get("value") is not None else Decimal("0"),
                 )
     else:
         recipe.save()
 
-    published, _ = publish_recipe(recipe, actor=actor)
-    return published
+    return recipe

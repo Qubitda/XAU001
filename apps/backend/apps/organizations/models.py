@@ -157,6 +157,8 @@ class OrganizationMembership(TimestampedModel):
         ORG_ADMIN = "ORG_ADMIN", "Firma Yöneticisi"
         OPS = "OPS", "Operasyon / Fiyatlama"
         B2B_BUYER = "B2B_BUYER", "B2B Satın Alma Yetkilisi"
+        SUPPLIER_ADMIN = "SUPPLIER_ADMIN", "Tedarikçi Yöneticisi"
+        SUPPLIER_USER = "SUPPLIER_USER", "Tedarikçi Kullanıcısı"
         B2C_CUSTOMER = "B2C_CUSTOMER", "Perakende Müşteri"
 
     user = models.ForeignKey(
@@ -182,6 +184,7 @@ class OrganizationMembership(TimestampedModel):
         related_name="+",
     )
     custom_permissions = models.JSONField(default=list, blank=True)
+    denied_permissions = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -203,6 +206,8 @@ class OrganizationMembership(TimestampedModel):
             return "erp"
         if self.role_key in (self.RoleKey.ORG_ADMIN, self.RoleKey.B2B_BUYER):
             return "b2b"
+        if self.role_key in (self.RoleKey.SUPPLIER_ADMIN, self.RoleKey.SUPPLIER_USER):
+            return "supplier"
         return "b2c"
 
 

@@ -19,6 +19,7 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 from apps.audit.services import record_audit
 from apps.authorization.permissions import HasPortalPermission
+from apps.catalog.services import sync_default_variant_center_carat
 from apps.common.responses import (
     CARAT_Q,
     GRAM_Q,
@@ -222,6 +223,15 @@ class OpsVariantListCreateView(APIView):
             ) from exc
 
         if d.get("initialStockQty", 0) > 0:
+            from apps.organizations.selectors import resolve_tenant_context
+
+            ctx = resolve_tenant_context(request)
+            if "inventory:manage" not in ctx.permissions:
+                raise DomainError(
+                    "Başlangıç stoğu girmek için 'inventory:manage' yetkisi gereklidir.",
+                    code="FORBIDDEN_FIELD",
+                    status_code=403,
+                )
             set_variant_warehouse_stock(
                 variant=variant,
                 warehouse=get_or_create_default_warehouse(),
@@ -367,6 +377,7 @@ class OpsStoneLineListCreateView(APIView):
             color_grade=d.get("colorGrade", "").strip(),
             cut_shape=d.get("cutShape", "").strip(),
         )
+        sync_default_variant_center_carat(product)
         record_audit(
             action="OPS_STONE_LINE_CREATED",
             entity_type="StoneLine",
@@ -415,6 +426,7 @@ class OpsStoneLineDetailView(APIView):
                 val = d[api_key].strip() if isinstance(d[api_key], str) else d[api_key]
                 setattr(stone, model_field, val)
         stone.save()
+        sync_default_variant_center_carat(stone.product)
         record_audit(
             action="OPS_STONE_LINE_UPDATED",
             entity_type="StoneLine",
@@ -430,8 +442,10 @@ class OpsStoneLineDetailView(APIView):
         stone = StoneLine.objects.select_for_update().select_related("product").filter(id=stone_id).first()
         if stone is None:
             raise DomainError("Taş satırı bulunamadı.", code="STONE_LINE_NOT_FOUND", status_code=404)
-        parent_sku = stone.product.parent_sku
+        product = stone.product
+        parent_sku = product.parent_sku
         stone.delete()
+        sync_default_variant_center_carat(product)
         record_audit(
             action="OPS_STONE_LINE_DELETED",
             entity_type="StoneLine",

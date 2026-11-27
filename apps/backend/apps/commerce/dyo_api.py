@@ -127,6 +127,10 @@ class DyoValidateView(APIView):
         )
 
 
+class B2bDyoValidateView(DyoValidateView):
+    permission_classes = [IsB2bOrganizationMember]
+
+
 class DyoBundleCreateView(APIView):
     permission_classes = [IsAuthenticated, HasApiScopeWrite]
     audience = "B2C"
@@ -189,3 +193,7 @@ class DyoBundleDetailView(APIView):
         bundle.status = CustomBundle.Status.CANCELLED
         bundle.save(update_fields=["status", "updated_at"])
         return envelope_response({"id": str(bundle.id), "deleted": True}, request)
+
+
+class B2bDyoBundleDetailView(DyoBundleDetailView):
+    permission_classes = [IsB2bOrganizationMember]

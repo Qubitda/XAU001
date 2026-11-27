@@ -99,6 +99,23 @@ def retrieve_checkout_form(token: str, *, organization_id: str | None = None) ->
     return _parse_response(raw)
 
 
+def retrieve_payment(
+    *,
+    payment_id: str = "",
+    conversation_id: str = "",
+    organization_id: str | None = None,
+) -> dict[str, Any]:
+    """Server-to-server Payment.retrieve query via official iyzipay SDK."""
+    options = get_iyzico_options(organization_id=organization_id)
+    payload: dict[str, Any] = {"locale": "tr"}
+    if payment_id:
+        payload["paymentId"] = str(payment_id)
+    if conversation_id:
+        payload["paymentConversationId"] = str(conversation_id)
+    raw = iyzipay.Payment().retrieve(payload, options)
+    return _parse_response(raw)
+
+
 def cancel_payment(
     *,
     payment_id: str,

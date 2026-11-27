@@ -1,14 +1,14 @@
 """OPS product list/create/detail endpoints."""
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils.text import slugify
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.audit.services import record_audit
 from apps.authorization.permissions import HasPortalPermission
-from apps.common.responses import envelope_response
+from apps.common.responses import apply_safe_ordering, envelope_response, paginated_envelope_response
 from apps.inventory.services import get_or_create_default_warehouse, set_variant_warehouse_stock
 from apps.market.services import get_current_rate_snapshot
 from apps.organizations.selectors import resolve_active_organization, resolve_tenant_context
@@ -18,6 +18,7 @@ from config.exceptions import DomainError
 from apps.catalog.models import ProductModel, ProductVariant, StoneLine
 from apps.catalog.product_details import dual_write_product_details
 from apps.catalog.product_kinds import kind_to_product_type_label, normalize_product_kind
+from apps.catalog.services import sync_default_variant_center_carat, validate_publishable
 from .common import (
     _apply_kind_fields,
     _detail_overrides_from_payload,
@@ -26,29 +27,63 @@ from .common import (
     _parse_int,
     _sync_product_media,
 )
-from .ops_serializers import OpsProductCreateSerializer, OpsProductUpdateSerializer
+from .ops_serializers import OpsProductSerializer
 from .recipe_sync import _sync_recipe_from_ledger
 from .serializers import _apply_filters, _products_queryset, serialize_ops_product
+
+FIELD_PERMISSIONS: dict[str, str] = {
+    "ledger": "pricing:edit",
+    "pricingMode": "pricing:edit",
+    "fireRatePct": "pricing:edit",
+    "stockQty": "inventory:manage",
+    "ownerOrganizationId": "orgs:manage",
+    "salesChannels": "catalog:publish",
+    "catalogStatus": "catalog:publish",
+}
+
+
+def _enforce_field_permissions(ctx, data: dict) -> None:
+    for field_name, perm in FIELD_PERMISSIONS.items():
+        if field_name in data and perm not in ctx.permissions:
+            raise DomainError(
+                f"'{field_name}' alanını değiştirmek için '{perm}' yetkisi gereklidir.",
+                code="FORBIDDEN_FIELD",
+                status_code=403,
+            )
+
 
 class OpsProductListCreateView(APIView):
     permission_classes = [HasPortalPermission]
     ops_only = True
-    required_permission = "catalog:write"
+    required_permissions_by_method = {
+        "GET": "catalog:read",
+        "POST": "catalog:write",
+    }
 
     def get(self, request: Request):
         rates = get_current_rate_snapshot()
         qs = _apply_filters(_products_queryset(), request)
-        payload = [
-            serialize_ops_product(p, p.published_recipes[0] if p.published_recipes else None, rates)
-            for p in qs
-        ]
-        return envelope_response(payload, request)
+        qs = apply_safe_ordering(
+            qs,
+            request,
+            allowed_fields={"createdAt": "created_at", "title": "title", "parentSku": "parent_sku"},
+            default="-created_at",
+        )
+        return paginated_envelope_response(
+            qs,
+            request,
+            lambda p: serialize_ops_product(p, p.published_recipes[0] if p.published_recipes else None, rates),
+            default_page_size=24,
+            max_page_size=100,
+        )
 
     @transaction.atomic
     def post(self, request: Request):
-        serializer = OpsProductCreateSerializer(data=request.data)
+        serializer = OpsProductSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        ctx = resolve_tenant_context(request)
+        _enforce_field_permissions(ctx, {k: v for k, v in request.data.items() if k in FIELD_PERMISSIONS})
         sku = d["parentSku"].strip().upper()
         if ProductModel.objects.filter(parent_sku=sku).exists():
             raise DomainError(f"{sku} model kodu zaten katalogda mevcut.", code="DUPLICATE_SKU", status_code=409)
@@ -64,90 +99,97 @@ class OpsProductListCreateView(APIView):
 
         initial_kind = normalize_product_kind(d.get("productKind") or d.get("productType"))
         erp_code = (d.get("erpCode") or "").strip() or None
-        product = ProductModel.objects.create(
-            parent_sku=sku,
-            erp_code=erp_code,
-            owner_organization=owner_org,
-            catalog_status=d.get("catalogStatus") or ProductModel.CatalogStatus.ACTIVE,
-            barcode=d.get("barcode", ""),
-            visual_type=d.get("visualType", "solitaire_ring"),
-            title=d["title"],
-            product_kind=initial_kind,
-            product_type=kind_to_product_type_label(initial_kind),
-            category=d["category"],
-            sub_category=d["subCategory"],
-            collection=d["collection"],
-            style_technique=d.get("styleTechnique", "Modern"),
-            occasion=d.get("occasion", ""),
-            age_group=d.get("ageGroup") or "Yetişkin",
-            metal_name=d.get("metalName") or "Altın",
-            purity_code=d["purityCode"],
-            metal_color=d["metalColor"],
-            available_colors=d.get("availableColors") or ["Beyaz", "Sarı", "Rose"],
-            sales_channels=_normalize_sales_channels(d.get("salesChannels")),
-            stone_type=d["stoneType"],
-            stone_measure_unit=d["stoneMeasureUnit"],
-            stone_clarity=d.get("stoneClarity", "VS1"),
-            stone_color_grade=d.get("stoneColorGrade", "F"),
-            stone_cut_grade=d.get("stoneCutGrade", "Excellent"),
-            stone_cut_shape=d.get("stoneCutShape", "Yuvarlak (Round)"),
-            stone_origin=d.get("stoneOrigin", "Doğal"),
-            setting_type=d.get("settingType", "6 Tırnak"),
-            certificate_agency=d.get("certificateAgency", "GIA"),
-            certificate_number=d.get("certificateNumber", ""),
-            gross_weight_gram=d["grossWeightGram"],
-            fire_rate_pct=d["fireRatePct"],
-            stock_status=(
-                ProductModel.StockStatus.OUT_OF_STOCK
-                if int(d["stockQty"]) <= 0 and d["stockStatus"] != ProductModel.StockStatus.MADE_TO_ORDER
-                else d["stockStatus"]
-            ),
-            stock_qty=d["stockQty"],
-            lead_time_days=d.get("leadTimeDays", 2),
-            ownership_type=d["ownershipType"],
-            supplier_name=d.get("supplierName", ""),
-            warehouse_location=d.get("warehouseLocation", ""),
-            variant_size=d.get("variantSize", 0),
-            available_sizes=d.get("availableSizes") or [],
-            width_mm=d.get("widthMm", Decimal("2.00")),
-            thickness_mm=d.get("thicknessMm", Decimal("1.60")),
-            height_mm=d.get("heightMm", Decimal("5.20")),
-            chain_type=d.get("chainType") or "",
-            clasp_type=d.get("claspType") or "",
-            is_resizable=d.get("isResizable", True),
-            warranty_months=d.get("warrantyMonths", 24),
-            insured_shipping_info=d.get("insuredShippingInfo", "Tam sigortalı Brinks / Loomis özel kurye"),
-            return_policy_text=d.get("returnPolicyText") or "Standart stok ürünlerinde 14 gün içinde koşulsuz iade; kişiye özel ölçü ve lazer yazı ürünlerinde iade istisnası uygulanır.",
-            description=d["description"],
-            mount_structure=mount_spec.get("structure", ProductModel.MountStructure.FULL),
-            allowed_carat_min=_parse_decimal(
-                mount_spec.get("allowedCaratMin"),
-                field_name="mountSpec.allowedCaratMin",
-                default=Decimal("0.100"),
-                min_value=Decimal("0"),
-            ),
-            allowed_carat_max=_parse_decimal(
-                mount_spec.get("allowedCaratMax"),
-                field_name="mountSpec.allowedCaratMax",
-                default=Decimal("2.000"),
-                min_value=Decimal("0"),
-            ),
-            head_code=mount_spec.get("headCode", ""),
-            band_code=mount_spec.get("bandCode", ""),
-            head_weight_gram=(
-                _parse_decimal(mount_spec["headWeightGram"], field_name="mountSpec.headWeightGram", min_value=Decimal("0"))
-                if mount_spec.get("headWeightGram") not in (None, "")
-                else None
-            ),
-            band_weight_gram=(
-                _parse_decimal(mount_spec["bandWeightGram"], field_name="mountSpec.bandWeightGram", min_value=Decimal("0"))
-                if mount_spec.get("bandWeightGram") not in (None, "")
-                else None
-            ),
-            seo_slug=raw_slug,
-            meta_title=d.get("metaTitle") or d["title"],
-            created_by=request.user,
-        )
+        try:
+            product = ProductModel.objects.create(
+                parent_sku=sku,
+                erp_code=erp_code,
+                owner_organization=owner_org,
+                catalog_status=d.get("catalogStatus") or ProductModel.CatalogStatus.DRAFT,
+                barcode=d.get("barcode", ""),
+                visual_type=d.get("visualType", "solitaire_ring"),
+                title=d["title"],
+                product_kind=initial_kind,
+                product_type=kind_to_product_type_label(initial_kind),
+                category=d["category"],
+                sub_category=d["subCategory"],
+                collection=d["collection"],
+                style_technique=d.get("styleTechnique", "Modern"),
+                occasion=d.get("occasion", ""),
+                age_group=d.get("ageGroup") or "Yetişkin",
+                metal_name=d.get("metalName") or "Altın",
+                purity_code=d["purityCode"],
+                metal_color=d["metalColor"],
+                available_colors=d.get("availableColors") or ["Beyaz", "Sarı", "Rose"],
+                sales_channels=_normalize_sales_channels(d.get("salesChannels")),
+                stone_type=d["stoneType"],
+                stone_measure_unit=d["stoneMeasureUnit"],
+                stone_clarity=d.get("stoneClarity", ""),
+                stone_color_grade=d.get("stoneColorGrade", ""),
+                stone_cut_grade=d.get("stoneCutGrade", ""),
+                stone_cut_shape=d.get("stoneCutShape", ""),
+                stone_origin=d.get("stoneOrigin", ""),
+                setting_type=d.get("settingType", ""),
+                certificate_agency=d.get("certificateAgency", ""),
+                certificate_number=d.get("certificateNumber", ""),
+                gross_weight_gram=d["grossWeightGram"],
+                fire_rate_pct=d["fireRatePct"],
+                stock_status=(
+                    ProductModel.StockStatus.OUT_OF_STOCK
+                    if int(d["stockQty"]) <= 0 and d["stockStatus"] != ProductModel.StockStatus.MADE_TO_ORDER
+                    else d["stockStatus"]
+                ),
+                stock_qty=d["stockQty"],
+                lead_time_days=d.get("leadTimeDays", 2),
+                ownership_type=d["ownershipType"],
+                supplier_name=d.get("supplierName", ""),
+                warehouse_location=d.get("warehouseLocation", ""),
+                variant_size=d.get("variantSize", 0),
+                available_sizes=d.get("availableSizes") or [],
+                width_mm=d.get("widthMm", Decimal("2.00")),
+                thickness_mm=d.get("thicknessMm", Decimal("1.60")),
+                height_mm=d.get("heightMm", Decimal("5.20")),
+                chain_type=d.get("chainType") or "",
+                clasp_type=d.get("claspType") or "",
+                is_resizable=d.get("isResizable", True),
+                warranty_months=d.get("warrantyMonths", 24),
+                insured_shipping_info=d.get("insuredShippingInfo", "Tam sigortalı Brinks / Loomis özel kurye"),
+                return_policy_text=d.get("returnPolicyText") or "Standart stok ürünlerinde 14 gün içinde koşulsuz iade; kişiye özel ölçü ve lazer yazı ürünlerinde iade istisnası uygulanır.",
+                description=d["description"],
+                mount_structure=mount_spec.get("structure", ProductModel.MountStructure.FULL),
+                allowed_carat_min=_parse_decimal(
+                    mount_spec.get("allowedCaratMin"),
+                    field_name="mountSpec.allowedCaratMin",
+                    default=Decimal("0.100"),
+                    min_value=Decimal("0"),
+                ),
+                allowed_carat_max=_parse_decimal(
+                    mount_spec.get("allowedCaratMax"),
+                    field_name="mountSpec.allowedCaratMax",
+                    default=Decimal("2.000"),
+                    min_value=Decimal("0"),
+                ),
+                head_code=mount_spec.get("headCode", ""),
+                band_code=mount_spec.get("bandCode", ""),
+                head_weight_gram=(
+                    _parse_decimal(mount_spec["headWeightGram"], field_name="mountSpec.headWeightGram", min_value=Decimal("0"))
+                    if mount_spec.get("headWeightGram") not in (None, "")
+                    else None
+                ),
+                band_weight_gram=(
+                    _parse_decimal(mount_spec["bandWeightGram"], field_name="mountSpec.bandWeightGram", min_value=Decimal("0"))
+                    if mount_spec.get("bandWeightGram") not in (None, "")
+                    else None
+                ),
+                seo_slug=raw_slug,
+                meta_title=d.get("metaTitle") or d["title"],
+                created_by=request.user,
+            )
+        except IntegrityError:
+            raise DomainError(
+                f"{sku} model kodu veya SEO slug zaten katalogda mevcut.",
+                code="DUPLICATE_SKU",
+                status_code=409,
+            )
 
         _sync_product_media(
             product,
@@ -189,18 +231,28 @@ class OpsProductListCreateView(APIView):
                 )
 
         # Always create a concrete default ProductVariant + WarehouseStock for every new model
-        color_code = {"Beyaz": "BYZ", "Sarı": "SRY", "Rose": "RSE"}.get(product.metal_color, "BYZ")
-        default_variant = ProductVariant.objects.create(
-            product=product,
-            sku=f"{product.parent_sku}-{product.purity_code}-{color_code}-{product.variant_size}",
-            purity_code=product.purity_code,
-            metal_color=product.metal_color,
-            size=product.variant_size,
-            center_stone_carat=computed_center_carat,
-            gross_weight_gram=product.gross_weight_gram,
-            stock_qty=d["stockQty"],
-            is_default=True,
+        color_code = {"Beyaz": "BYZ", "Sarı": "SRY", "Rose": "RSE"}.get(
+            product.metal_color,
+            (slugify(product.metal_color).replace("-", "").upper()[:3] or "STD"),
         )
+        try:
+            default_variant = ProductVariant.objects.create(
+                product=product,
+                sku=f"{product.parent_sku}-{product.purity_code}-{color_code}-{product.variant_size}",
+                purity_code=product.purity_code,
+                metal_color=product.metal_color,
+                size=product.variant_size,
+                center_stone_carat=computed_center_carat,
+                gross_weight_gram=product.gross_weight_gram,
+                stock_qty=d["stockQty"],
+                is_default=True,
+            )
+        except IntegrityError:
+            raise DomainError(
+                "Varsayılan varyant SKU'su başka bir varyantla çakışıyor.",
+                code="DUPLICATE_VARIANT_SKU",
+                status_code=409,
+            )
         set_variant_warehouse_stock(
             variant=default_variant,
             warehouse=get_or_create_default_warehouse(),
@@ -217,13 +269,12 @@ class OpsProductListCreateView(APIView):
                 actor=request.user,
             )
         else:
-            recipe = PricingRecipe.objects.create(product=product, version=1, pricing_mode=d.get("pricingMode", "1"))
-            CostLine.objects.create(recipe=recipe, line_type=CostLine.LineType.MADEN, fc_currency="USD")
-            CostLine.objects.create(recipe=recipe, line_type=CostLine.LineType.ISCILIK, fc_currency="EUR", fc_price=Decimal("15.00"))
-            ChannelRule.objects.create(recipe=recipe, channel=ChannelRule.Channel.B2B, profit_unit="%", profit_value=Decimal("15"), servis_bedeli_unit="%", servis_bedeli_value=Decimal("1"))
-            ChannelRule.objects.create(recipe=recipe, channel=ChannelRule.Channel.B2B_API, profit_unit="%", profit_value=Decimal("15"), servis_bedeli_unit="%", servis_bedeli_value=Decimal("1"))
-            ChannelRule.objects.create(recipe=recipe, channel=ChannelRule.Channel.B2C_API, profit_unit="%", profit_value=Decimal("40"), servis_bedeli_unit="%", servis_bedeli_value=Decimal("2"))
-            publish_recipe(recipe, actor=request.user)
+            recipe = PricingRecipe.objects.create(
+                product=product,
+                version=1,
+                status=PricingRecipe.Status.DRAFT,
+                pricing_mode=d.get("pricingMode", "1"),
+            )
 
         dual_write_product_details(product, _detail_overrides_from_payload(d))
         record_audit(action="PRODUCT_CREATED", entity_type="ProductModel", entity_id=sku, actor=request.user)
@@ -235,7 +286,11 @@ class OpsProductListCreateView(APIView):
 class OpsProductDetailView(APIView):
     permission_classes = [HasPortalPermission]
     ops_only = True
-    required_permission = "catalog:write"
+    required_permissions_by_method = {
+        "GET": "catalog:read",
+        "PATCH": "catalog:write",
+        "DELETE": "catalog:delete",
+    }
 
     def get(self, request: Request, parent_sku: str):
         rates = get_current_rate_snapshot()
@@ -250,9 +305,32 @@ class OpsProductDetailView(APIView):
         product = ProductModel.objects.filter(parent_sku=parent_sku).first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
-        serializer = OpsProductUpdateSerializer(data=request.data, partial=True)
+        ctx = resolve_tenant_context(request)
+        if str(request.data.get("catalogStatus") or "").upper() == ProductModel.CatalogStatus.ACTIVE:
+            raise DomainError(
+                "Ürünü yayına almak için /api/v1/ops/products/<sku>/publish endpoint'ini kullanın.",
+                code="USE_PUBLISH_ENDPOINT",
+                status_code=400,
+            )
+        if "stockQty" in request.data:
+            raise DomainError(
+                "Stok miktarını güncellemek için /api/v1/ops/products/<sku>/variants/<id>/stock endpoint'ini kullanın.",
+                code="USE_INVENTORY_API",
+                status_code=400,
+            )
+        serializer = OpsProductSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
+        _enforce_field_permissions(ctx, d)
+        changed_audit: dict[str, dict] = {}
+        if "fireRatePct" in d and d["fireRatePct"] != product.fire_rate_pct:
+            changed_audit["fireRatePct"] = {"from": str(product.fire_rate_pct), "to": str(d["fireRatePct"])}
+        if "catalogStatus" in d and d["catalogStatus"] != product.catalog_status:
+            changed_audit["catalogStatus"] = {"from": product.catalog_status, "to": d["catalogStatus"]}
+        if "salesChannels" in d:
+            changed_audit["salesChannels"] = {"from": product.sales_channels or [], "to": _normalize_sales_channels(d["salesChannels"])}
+        if "ledger" in d:
+            changed_audit["ledger"] = {"from": "published_or_prev", "to": sorted(d["ledger"].keys())}
 
         if "ownerOrganizationId" in d:
             if d["ownerOrganizationId"] is None:
@@ -409,7 +487,7 @@ class OpsProductDetailView(APIView):
                         product=product, role=StoneLine.Role.YAN, stone_type=product.stone_type, count=1, carat=d["sideStoneCarat"]
                     )
 
-        # Sync default variant physical specs & warehouse stock if edited at model level
+        # Sync default variant physical specs if edited at model level
         default_variant = product.variants.filter(is_default=True).first()
         if default_variant is not None:
             v_update_fields: list[str] = []
@@ -422,20 +500,11 @@ class OpsProductDetailView(APIView):
             if "metalColor" in d:
                 default_variant.metal_color = d["metalColor"]
                 v_update_fields.append("metal_color")
-            if updated_center_carat is not None:
-                default_variant.center_stone_carat = updated_center_carat
-                v_update_fields.append("center_stone_carat")
             if v_update_fields:
                 v_update_fields.append("updated_at")
                 default_variant.save(update_fields=v_update_fields)
-            if "stockQty" in d:
-                set_variant_warehouse_stock(
-                    variant=default_variant,
-                    warehouse=get_or_create_default_warehouse(),
-                    quantity=d["stockQty"],
-                    reference_no=f"OPS-ADJ-{default_variant.sku}",
-                    actor=request.user,
-                )
+        if updated_center_carat is not None:
+            sync_default_variant_center_carat(product)
 
         if "ledger" in d or "pricingMode" in d:
             recipe = _sync_recipe_from_ledger(
@@ -446,22 +515,106 @@ class OpsProductDetailView(APIView):
             )
         else:
             recipe = product.pricing_recipes.filter(status=PricingRecipe.Status.PUBLISHED).first()
-            if recipe is not None:
-                publish_recipe(recipe, actor=request.user)
 
         dual_write_product_details(product, _detail_overrides_from_payload(d))
-        record_audit(action="PRODUCT_UPDATED", entity_type="ProductModel", entity_id=parent_sku, actor=request.user)
+        record_audit(
+            action="PRODUCT_UPDATED",
+            entity_type="ProductModel",
+            entity_id=parent_sku,
+            actor=request.user,
+            metadata={"changed": changed_audit} if changed_audit else {},
+        )
         rates = get_current_rate_snapshot()
         product = _products_queryset().get(id=product.id)
         return envelope_response(serialize_ops_product(product, recipe, rates), request)
 
+    @transaction.atomic
     def delete(self, request: Request, parent_sku: str):
-        ctx = resolve_tenant_context(request)
-        if "catalog:delete" not in ctx.permissions:
-            raise DomainError("Ürün silme yetkiniz bulunmuyor.", code="FORBIDDEN", status_code=403)
         product = ProductModel.objects.filter(parent_sku=parent_sku).first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
-        product.delete()
-        record_audit(action="PRODUCT_DELETED", entity_type="ProductModel", entity_id=parent_sku, actor=request.user)
-        return envelope_response({"parentSku": parent_sku, "deleted": True}, request)
+        from apps.commerce.models import B2bDraftLine, B2bOrderLine, B2cCartItem, B2cOrderItem
+
+        has_refs = (
+            B2cOrderItem.objects.filter(parent_sku=parent_sku).exists()
+            or B2bOrderLine.objects.filter(parent_sku=parent_sku).exists()
+            or B2cCartItem.objects.filter(parent_sku=parent_sku).exists()
+            or B2bDraftLine.objects.filter(parent_sku=parent_sku).exists()
+        )
+        if product.catalog_status == ProductModel.CatalogStatus.DRAFT and not has_refs:
+            product.delete()
+            record_audit(action="PRODUCT_DELETED", entity_type="ProductModel", entity_id=parent_sku, actor=request.user)
+            return envelope_response({"parentSku": parent_sku, "deleted": True, "archived": False}, request)
+
+        prev_status = product.catalog_status
+        product.catalog_status = ProductModel.CatalogStatus.ARCHIVED
+        product.save(update_fields=["catalog_status", "updated_at"])
+        record_audit(
+            action="PRODUCT_ARCHIVED",
+            entity_type="ProductModel",
+            entity_id=parent_sku,
+            actor=request.user,
+            metadata={"changed": {"catalogStatus": {"from": prev_status, "to": "ARCHIVED"}}},
+        )
+        return envelope_response({"parentSku": parent_sku, "deleted": False, "archived": True}, request)
+
+
+class OpsProductPublishView(APIView):
+    permission_classes = [HasPortalPermission]
+    ops_only = True
+    required_permission = "catalog:publish"
+
+    @transaction.atomic
+    def post(self, request: Request, parent_sku: str):
+        product = ProductModel.objects.filter(parent_sku=parent_sku).first()
+        if product is None:
+            raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
+        missing = validate_publishable(product)
+        if missing:
+            return envelope_response(
+                {"code": "NOT_PUBLISHABLE", "message": "Ürün yayın koşulları sağlanmadı.", "missing": missing},
+                request,
+                status=422,
+            )
+        prev = product.catalog_status
+        product.catalog_status = ProductModel.CatalogStatus.ACTIVE
+        product.save(update_fields=["catalog_status", "updated_at"])
+        record_audit(
+            action="PRODUCT_PUBLISHED",
+            entity_type="ProductModel",
+            entity_id=parent_sku,
+            actor=request.user,
+            metadata={"changed": {"catalogStatus": {"from": prev, "to": "ACTIVE"}}},
+        )
+        return envelope_response({"parentSku": parent_sku, "catalogStatus": product.catalog_status}, request)
+
+
+class OpsProductRecipePublishView(APIView):
+    permission_classes = [HasPortalPermission]
+    ops_only = True
+    required_permission = "pricing:edit"
+
+    @transaction.atomic
+    def post(self, request: Request, parent_sku: str):
+        product = ProductModel.objects.filter(parent_sku=parent_sku).first()
+        if product is None:
+            raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
+        draft = (
+            PricingRecipe.objects.filter(product=product, status=PricingRecipe.Status.DRAFT)
+            .order_by("-version")
+            .first()
+        )
+        if draft is None:
+            raise DomainError("Yayınlanacak DRAFT fiyat reçetesi bulunamadı.", code="DRAFT_RECIPE_NOT_FOUND", status_code=404)
+        published, _ = publish_recipe(draft, actor=request.user)
+        record_audit(
+            action="PRODUCT_RECIPE_PUBLISHED",
+            entity_type="PricingRecipe",
+            entity_id=str(published.id),
+            actor=request.user,
+            metadata={"parentSku": parent_sku, "version": published.version},
+        )
+        return envelope_response(
+            {"parentSku": parent_sku, "recipeId": str(published.id), "version": published.version, "status": published.status},
+            request,
+        )

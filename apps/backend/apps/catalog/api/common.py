@@ -119,7 +119,25 @@ def _stone_summary(product: ProductModel) -> tuple[Decimal, Decimal, list[dict]]
     return center_carat, side_carat, serialized
 
 
+def _safe_detail(product: ProductModel, attr: str):
+    try:
+        return getattr(product, attr)
+    except Exception:
+        return None
+
+
 def _serialize_mount(product: ProductModel) -> dict:
+    mounting = _safe_detail(product, "mounting_detail")
+    if mounting is not None:
+        return {
+            "structure": mounting.mount_structure or product.mount_structure,
+            "allowedCaratMin": _dec_str(mounting.min_carat if mounting.min_carat is not None else product.allowed_carat_min, CARAT_Q),
+            "allowedCaratMax": _dec_str(mounting.max_carat if mounting.max_carat is not None else product.allowed_carat_max, CARAT_Q),
+            "headCode": mounting.head_code or product.head_code,
+            "bandCode": mounting.band_code or product.band_code,
+            "headWeightGram": _dec_str(mounting.head_weight_gram if mounting.head_weight_gram is not None else product.head_weight_gram, GRAM_Q),
+            "bandWeightGram": _dec_str(mounting.band_weight_gram if mounting.band_weight_gram is not None else product.band_weight_gram, GRAM_Q),
+        }
     return {
         "structure": product.mount_structure,
         "allowedCaratMin": _dec_str(product.allowed_carat_min, CARAT_Q),
@@ -137,11 +155,14 @@ def _serialize_variants(
     rates,
     *,
     audience: str,
+    variant_outputs: dict | None = None,
 ) -> list[dict]:
     variants = [v for v in product.variants.all() if v.is_active]
     payload: list[dict] = []
     for v in variants:
         out = evaluate_recipe(recipe, rates, variant=v) if recipe is not None else None
+        if variant_outputs is not None:
+            variant_outputs[v.id] = out
         b2c_ch = out.resolve_channel("B2C") if out else None
         b2b_ch = out.resolve_channel("B2B") if out else None
 
@@ -188,7 +209,15 @@ def _sync_product_media(
 ) -> None:
     def _is_http_url(val: str) -> bool:
         cleaned = (val or "").strip()
-        return len(cleaned) <= 500 and (cleaned.startswith("https://") or cleaned.startswith("http://"))
+        if not cleaned:
+            return False
+        if len(cleaned) > 500 or not cleaned.startswith("https://"):
+            raise DomainError(
+                "Medya URL'si yalnızca geçerli bir https:// adresi olabilir.",
+                code="INVALID_MEDIA_URL",
+                status_code=400,
+            )
+        return True
 
     if gallery_images is not None:
         ProductMedia.objects.filter(

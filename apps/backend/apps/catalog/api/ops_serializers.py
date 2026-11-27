@@ -1,144 +1,153 @@
-"""OPS product create/update DRF serializers."""
+"""Typed DRF input serializers for OPS catalog product endpoints."""
 from decimal import Decimal
 
 from rest_framework import serializers
 
-class OpsProductCreateSerializer(serializers.Serializer):
-    parentSku = serializers.CharField(max_length=32)
+from apps.catalog.models import ProductModel, StoneLine
+
+
+def _validate_https_url(value: str) -> str:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return ""
+    if len(cleaned) > 500 or not cleaned.startswith("https://"):
+        raise serializers.ValidationError("URL yalnızca geçerli bir https:// adresi olabilir (en fazla 500 karakter).")
+    return cleaned
+
+
+class StoneLineInputSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=StoneLine.Role.choices, default=StoneLine.Role.MERKEZ, required=False)
+    stoneType = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    measureUnit = serializers.CharField(max_length=16, required=False, default="ct")
+    count = serializers.IntegerField(min_value=1, default=1, required=False)
+    carat = serializers.DecimalField(
+        max_digits=8,
+        decimal_places=3,
+        min_value=Decimal("0"),
+        default=Decimal("0"),
+        required=False,
+    )
+    clarity = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
+    colorGrade = serializers.CharField(max_length=40, required=False, allow_blank=True, default="")
+    cutShape = serializers.CharField(max_length=60, required=False, allow_blank=True, default="")
+
+
+class MountSpecSerializer(serializers.Serializer):
+    structure = serializers.ChoiceField(choices=ProductModel.MountStructure.choices, required=False)
+    allowedCaratMin = serializers.DecimalField(
+        max_digits=8, decimal_places=3, min_value=Decimal("0"), required=False, allow_null=True
+    )
+    allowedCaratMax = serializers.DecimalField(
+        max_digits=8, decimal_places=3, min_value=Decimal("0"), required=False, allow_null=True
+    )
+    headCode = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    bandCode = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    headWeightGram = serializers.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0"), required=False, allow_null=True
+    )
+    bandWeightGram = serializers.DecimalField(
+        max_digits=8, decimal_places=2, min_value=Decimal("0"), required=False, allow_null=True
+    )
+
+
+class OpsProductSerializer(serializers.Serializer):
+    """Unified OPS product serializer for create (full) and update (partial=True)."""
+
+    parentSku = serializers.CharField(max_length=64)
+    erpCode = serializers.CharField(max_length=64, required=False, allow_blank=True, allow_null=True)
     ownerOrganizationId = serializers.UUIDField(required=False, allow_null=True)
     catalogStatus = serializers.ChoiceField(
-        choices=["DRAFT", "ACTIVE", "ARCHIVED"], required=False, default="ACTIVE"
+        choices=ProductModel.CatalogStatus.choices,
+        default=ProductModel.CatalogStatus.DRAFT,
+        required=False,
     )
-    title = serializers.CharField(max_length=240)
-    productType = serializers.CharField(max_length=80, required=False, allow_blank=True, default="Kuyum (Bitmiş Ürün)")
-    productKind = serializers.ChoiceField(
-        choices=["FINISHED", "MOUNTING", "LOOSE_STONE"], required=False, allow_null=True
-    )
-    erpCode = serializers.CharField(max_length=64, required=False, allow_blank=True, allow_null=True)
-    finishedDetail = serializers.DictField(required=False, allow_null=True)
-    mountingDetail = serializers.DictField(required=False, allow_null=True)
-    looseStoneDetail = serializers.DictField(required=False, allow_null=True)
-    category = serializers.CharField(max_length=80)
-    subCategory = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
-    collection = serializers.CharField(max_length=120, required=False, default="Yeni Koleksiyon")
-    styleTechnique = serializers.CharField(max_length=80, required=False, allow_blank=True, default="Modern")
-    occasion = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
-    ageGroup = serializers.CharField(max_length=48, required=False, allow_blank=True, default="Yetişkin")
-    visualType = serializers.CharField(max_length=48, required=False, default="solitaire_ring")
-    barcode = serializers.CharField(max_length=48, required=False, allow_blank=True, default="")
-    metalName = serializers.CharField(max_length=40, required=False, allow_blank=True, default="Altın")
-    purityCode = serializers.CharField(max_length=16)
-    metalColor = serializers.CharField(max_length=64)
-    availableColors = serializers.ListField(child=serializers.CharField(max_length=64), required=False)
-    salesChannels = serializers.ListField(child=serializers.CharField(max_length=16), required=False)
-    stoneType = serializers.CharField(max_length=48, required=False, default="Pırlanta")
-    stoneMeasureUnit = serializers.ChoiceField(choices=["ct", "gr", "mm"], required=False, default="ct")
-    stoneClarity = serializers.CharField(max_length=24, required=False, allow_blank=True, default="VS1")
-    stoneColorGrade = serializers.CharField(max_length=24, required=False, allow_blank=True, default="F")
-    stoneCutGrade = serializers.CharField(max_length=32, required=False, allow_blank=True, default="Excellent")
-    stoneCutShape = serializers.CharField(max_length=64, required=False, allow_blank=True, default="Yuvarlak (Round)")
-    stoneOrigin = serializers.CharField(max_length=48, required=False, allow_blank=True, default="Doğal")
-    settingType = serializers.CharField(max_length=64, required=False, allow_blank=True, default="6 Tırnak")
-    certificateAgency = serializers.CharField(max_length=32, required=False, allow_blank=True, default="GIA")
-    certificateNumber = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
-    certificateFileUrl = serializers.CharField(max_length=500, required=False, allow_blank=True, default="")
-    grossWeightGram = serializers.DecimalField(max_digits=10, decimal_places=4, min_value=Decimal("0.01"))
-    centerStoneCarat = serializers.DecimalField(max_digits=6, decimal_places=3, default=Decimal("0"))
-    sideStoneCarat = serializers.DecimalField(max_digits=6, decimal_places=3, default=Decimal("0"))
-    fireRatePct = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), max_value=Decimal("50"), default=Decimal("2.00"))
-    stockStatus = serializers.ChoiceField(choices=["Stokta", "Siparişe Özel", "Tükendi"], default="Stokta")
-    stockQty = serializers.IntegerField(min_value=0, default=1)
-    leadTimeDays = serializers.IntegerField(min_value=0, max_value=180, required=False, default=2)
-    ownershipType = serializers.ChoiceField(choices=["Öz Mal", "Konsinye (Emanet)"], default="Öz Mal")
-    supplierName = serializers.CharField(max_length=160, required=False, allow_blank=True, default="")
-    warehouseLocation = serializers.CharField(max_length=80, required=False, allow_blank=True, default="")
-    variantSize = serializers.IntegerField(min_value=0, max_value=70, required=False, default=14)
-    availableSizes = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=70), required=False)
-    widthMm = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("2.00"))
-    thicknessMm = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("1.60"))
-    heightMm = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), required=False, default=Decimal("5.20"))
-    chainType = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
-    claspType = serializers.CharField(max_length=64, required=False, allow_blank=True, default="")
-    isResizable = serializers.BooleanField(required=False, default=True)
-    warrantyMonths = serializers.IntegerField(min_value=0, max_value=120, required=False, default=24)
-    insuredShippingInfo = serializers.CharField(max_length=200, required=False, allow_blank=True, default="Tam sigortalı Brinks / Loomis özel kurye")
-    returnPolicyText = serializers.CharField(required=False, allow_blank=True, default="")
-    seoSlug = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
-    metaTitle = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
-    galleryImages = serializers.ListField(child=serializers.CharField(allow_blank=True), required=False)
-    reelsVideoUrl = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    spin360Url = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    description = serializers.CharField(required=False, allow_blank=True, default="")
-    pricingMode = serializers.ChoiceField(choices=["1", "2"], required=False, default="1")
-    ledger = serializers.DictField(required=False)
-    mountSpec = serializers.DictField(required=False)
-    stoneLines = serializers.ListField(child=serializers.DictField(), required=False)
-
-
-class OpsProductUpdateSerializer(serializers.Serializer):
-    ownerOrganizationId = serializers.UUIDField(required=False, allow_null=True)
-    catalogStatus = serializers.ChoiceField(choices=["DRAFT", "ACTIVE", "ARCHIVED"], required=False)
-    title = serializers.CharField(max_length=240, required=False)
-    barcode = serializers.CharField(max_length=48, required=False, allow_blank=True)
-    visualType = serializers.CharField(max_length=48, required=False)
+    barcode = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    visualType = serializers.CharField(max_length=64, required=False, default="solitaire_ring")
+    productKind = serializers.ChoiceField(choices=ProductModel.ProductKind.choices, required=False)
     productType = serializers.CharField(max_length=80, required=False, allow_blank=True)
-    productKind = serializers.ChoiceField(
-        choices=["FINISHED", "MOUNTING", "LOOSE_STONE"], required=False, allow_null=True
-    )
-    erpCode = serializers.CharField(max_length=64, required=False, allow_blank=True, allow_null=True)
-    finishedDetail = serializers.DictField(required=False, allow_null=True)
-    mountingDetail = serializers.DictField(required=False, allow_null=True)
-    looseStoneDetail = serializers.DictField(required=False, allow_null=True)
-    category = serializers.CharField(max_length=80, required=False)
-    subCategory = serializers.CharField(max_length=120, required=False, allow_blank=True)
-    collection = serializers.CharField(max_length=120, required=False)
-    styleTechnique = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    title = serializers.CharField(max_length=255)
+    category = serializers.CharField(max_length=80)
+    subCategory = serializers.CharField(max_length=80, required=False, default="", allow_blank=True)
+    collection = serializers.CharField(max_length=80, required=False, default="", allow_blank=True)
+    styleTechnique = serializers.CharField(max_length=80, required=False, default="Modern")
     occasion = serializers.CharField(max_length=80, required=False, allow_blank=True)
-    ageGroup = serializers.CharField(max_length=48, required=False, allow_blank=True)
+    ageGroup = serializers.CharField(max_length=60, required=False, allow_blank=True)
     metalName = serializers.CharField(max_length=40, required=False, allow_blank=True)
-    purityCode = serializers.CharField(max_length=16, required=False)
-    metalColor = serializers.CharField(max_length=64, required=False)
-    availableColors = serializers.ListField(child=serializers.CharField(max_length=64), required=False)
-    salesChannels = serializers.ListField(child=serializers.CharField(max_length=16), required=False)
-    stoneType = serializers.CharField(max_length=48, required=False)
-    stoneMeasureUnit = serializers.ChoiceField(choices=["ct", "gr", "mm"], required=False)
-    stoneClarity = serializers.CharField(max_length=24, required=False, allow_blank=True)
-    stoneColorGrade = serializers.CharField(max_length=24, required=False, allow_blank=True)
-    stoneCutGrade = serializers.CharField(max_length=32, required=False, allow_blank=True)
-    stoneCutShape = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    stoneOrigin = serializers.CharField(max_length=48, required=False, allow_blank=True)
-    settingType = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    certificateAgency = serializers.CharField(max_length=32, required=False, allow_blank=True)
-    certificateNumber = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    certificateFileUrl = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    centerStoneCarat = serializers.DecimalField(max_digits=6, decimal_places=3, min_value=Decimal("0"), required=False)
-    sideStoneCarat = serializers.DecimalField(max_digits=6, decimal_places=3, min_value=Decimal("0"), required=False)
-    grossWeightGram = serializers.DecimalField(max_digits=10, decimal_places=4, min_value=Decimal("0.01"), required=False)
-    fireRatePct = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), max_value=Decimal("50"), required=False)
-    stockStatus = serializers.ChoiceField(choices=["Stokta", "Siparişe Özel", "Tükendi"], required=False)
-    stockQty = serializers.IntegerField(min_value=0, required=False)
-    leadTimeDays = serializers.IntegerField(min_value=0, max_value=180, required=False)
-    ownershipType = serializers.ChoiceField(choices=["Öz Mal", "Konsinye (Emanet)"], required=False)
-    supplierName = serializers.CharField(max_length=160, required=False, allow_blank=True)
-    warehouseLocation = serializers.CharField(max_length=80, required=False, allow_blank=True)
-    variantSize = serializers.IntegerField(min_value=0, max_value=70, required=False)
-    availableSizes = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=70), required=False)
+    purityCode = serializers.CharField(max_length=16)
+    metalColor = serializers.CharField(max_length=40)
+    availableColors = serializers.ListField(child=serializers.CharField(max_length=40), required=False)
+    salesChannels = serializers.ListField(
+        child=serializers.ChoiceField(choices=["B2B", "B2B_API", "B2C_API"]),
+        required=False,
+    )
+    stoneType = serializers.CharField(max_length=60, required=False, default="Pırlanta", allow_blank=True)
+    stoneMeasureUnit = serializers.CharField(max_length=16, required=False, default="ct")
+    stoneClarity = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    stoneColorGrade = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    stoneCutGrade = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    stoneCutShape = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    stoneOrigin = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    settingType = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    certificateAgency = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    certificateNumber = serializers.CharField(max_length=80, required=False, allow_blank=True)
+    grossWeightGram = serializers.DecimalField(max_digits=8, decimal_places=2, min_value=Decimal("0.01"))
+    fireRatePct = serializers.DecimalField(
+        max_digits=6, decimal_places=2, min_value=Decimal("0"), max_value=Decimal("100"), required=False, default=Decimal("0")
+    )
+    stockStatus = serializers.ChoiceField(
+        choices=ProductModel.StockStatus.choices, required=False, default=ProductModel.StockStatus.IN_STOCK
+    )
+    stockQty = serializers.IntegerField(min_value=0, default=0, required=False)
+    leadTimeDays = serializers.IntegerField(min_value=0, max_value=365, required=False, default=2)
+    ownershipType = serializers.ChoiceField(
+        choices=ProductModel.OwnershipType.choices, required=False, default=ProductModel.OwnershipType.OWNED
+    )
+    supplierName = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    warehouseLocation = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    variantSize = serializers.IntegerField(min_value=0, max_value=60, required=False, default=0)
+    availableSizes = serializers.ListField(child=serializers.IntegerField(min_value=0, max_value=60), required=False)
     widthMm = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), required=False)
     thicknessMm = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), required=False)
     heightMm = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=Decimal("0"), required=False)
-    chainType = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    claspType = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    isResizable = serializers.BooleanField(required=False)
-    warrantyMonths = serializers.IntegerField(min_value=0, max_value=120, required=False)
+    chainType = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    claspType = serializers.CharField(max_length=60, required=False, allow_blank=True)
+    isResizable = serializers.BooleanField(required=False, default=True)
+    warrantyMonths = serializers.IntegerField(min_value=0, max_value=120, required=False, default=24)
     insuredShippingInfo = serializers.CharField(max_length=200, required=False, allow_blank=True)
     returnPolicyText = serializers.CharField(required=False, allow_blank=True)
-    seoSlug = serializers.CharField(max_length=240, required=False, allow_blank=True)
-    metaTitle = serializers.CharField(max_length=240, required=False, allow_blank=True)
-    galleryImages = serializers.ListField(child=serializers.CharField(allow_blank=True), required=False)
-    reelsVideoUrl = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    spin360Url = serializers.CharField(max_length=500, required=False, allow_blank=True)
-    description = serializers.CharField(required=False, allow_blank=True)
-    pricingMode = serializers.ChoiceField(choices=["1", "2"], required=False)
+    description = serializers.CharField(required=False, default="", allow_blank=True)
+    seoSlug = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    metaTitle = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    centerStoneCarat = serializers.DecimalField(
+        max_digits=8, decimal_places=3, min_value=Decimal("0"), required=False, default=Decimal("0")
+    )
+    sideStoneCarat = serializers.DecimalField(
+        max_digits=8, decimal_places=3, min_value=Decimal("0"), required=False, default=Decimal("0")
+    )
+    pricingMode = serializers.CharField(max_length=16, required=False, default="1")
+    mountSpec = MountSpecSerializer(required=False)
+    stoneLines = StoneLineInputSerializer(many=True, required=False)
+    galleryImages = serializers.ListField(
+        child=serializers.URLField(max_length=500),
+        max_length=20,
+        required=False,
+    )
+    reelsVideoUrl = serializers.URLField(max_length=500, required=False, allow_blank=True)
+    spin360Url = serializers.URLField(max_length=500, required=False, allow_blank=True)
+    certificateFileUrl = serializers.URLField(max_length=500, required=False, allow_blank=True)
     ledger = serializers.DictField(required=False)
-    mountSpec = serializers.DictField(required=False)
-    stoneLines = serializers.ListField(child=serializers.DictField(), required=False)
+    finishedDetail = serializers.DictField(required=False)
+    mountingDetail = serializers.DictField(required=False)
+    looseStoneDetail = serializers.DictField(required=False)
+
+    def validate_reelsVideoUrl(self, value: str) -> str:
+        return _validate_https_url(value)
+
+    def validate_spin360Url(self, value: str) -> str:
+        return _validate_https_url(value)
+
+    def validate_certificateFileUrl(self, value: str) -> str:
+        return _validate_https_url(value)
+
+    def validate_galleryImages(self, value: list[str]) -> list[str]:
+        return [_validate_https_url(item) for item in value if (item or "").strip()]

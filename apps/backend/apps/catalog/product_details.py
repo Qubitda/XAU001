@@ -4,10 +4,15 @@ Dual-write / read helpers for core ProductModel + type detail tables.
 
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
+
+from apps.common.responses import CARAT_Q, GRAM_Q, MONEY_Q, dec_str
+
+logger = logging.getLogger(__name__)
 
 from apps.catalog.models import (
     FinishedDetail,
@@ -44,8 +49,8 @@ def resolve_fineness(purity_code: str, fallback: Decimal | None = None) -> Decim
             raw = (item.meta or {}).get("fineness")
             if raw is not None:
                 return Decimal(str(raw))
-    except Exception:
-        pass
+    except (LookupError, ValueError, TypeError, ArithmeticError) as exc:
+        logger.warning("resolve_fineness failed for %r: %s", purity_code, exc)
     if code in PURITY_FINENESS:
         return PURITY_FINENESS[code]
     return fallback if fallback is not None else Decimal("0.5850")
@@ -264,17 +269,17 @@ def serialize_finished_detail(d: FinishedDetail, *, for_ops: bool = False) -> di
         "metalName": d.metal_name,
         "purityCode": d.purity_code,
         "metalColor": d.metal_color,
-        "fineness": float(d.fineness),
-        "baseWeightGr": float(d.base_weight_gr),
+        "fineness": dec_str(d.fineness, Decimal("0.0001")),
+        "baseWeightGr": dec_str(d.base_weight_gr, GRAM_Q),
         "stoneSummary": d.stone_summary or {},
     }
     if for_ops:
         data.update(
             {
-                "fireRatePct": float(d.fire_rate_pct),
+                "fireRatePct": dec_str(d.fire_rate_pct, MONEY_Q),
                 "laborCostType": d.labor_cost_type,
-                "laborCostValue": float(d.labor_cost_value),
-                "fixedStoneCostUsd": float(d.fixed_stone_cost_usd),
+                "laborCostValue": dec_str(d.labor_cost_value, MONEY_Q),
+                "fixedStoneCostUsd": dec_str(d.fixed_stone_cost_usd, MONEY_Q),
             }
         )
     return data
@@ -285,28 +290,28 @@ def serialize_mounting_detail(d: MountingDetail, *, for_ops: bool = False) -> di
         "metalName": d.metal_name,
         "purityCode": d.purity_code,
         "metalColor": d.metal_color,
-        "fineness": float(d.fineness),
-        "netWeightGr": float(d.net_weight_gr),
+        "fineness": dec_str(d.fineness, Decimal("0.0001")),
+        "netWeightGr": dec_str(d.net_weight_gr, GRAM_Q),
         "mountStructure": d.mount_structure,
         "compatibleShapes": d.compatible_shapes or [],
-        "minCarat": float(d.min_carat) if d.min_carat is not None else None,
-        "maxCarat": float(d.max_carat) if d.max_carat is not None else None,
-        "minLengthMm": float(d.min_length_mm) if d.min_length_mm is not None else None,
-        "maxLengthMm": float(d.max_length_mm) if d.max_length_mm is not None else None,
-        "minWidthMm": float(d.min_width_mm) if d.min_width_mm is not None else None,
-        "maxWidthMm": float(d.max_width_mm) if d.max_width_mm is not None else None,
+        "minCarat": dec_str(d.min_carat, CARAT_Q),
+        "maxCarat": dec_str(d.max_carat, CARAT_Q),
+        "minLengthMm": dec_str(d.min_length_mm, MONEY_Q),
+        "maxLengthMm": dec_str(d.max_length_mm, MONEY_Q),
+        "minWidthMm": dec_str(d.min_width_mm, MONEY_Q),
+        "maxWidthMm": dec_str(d.max_width_mm, MONEY_Q),
         "settingTypeCode": d.setting_type_code,
         "headCode": d.head_code,
         "bandCode": d.band_code,
-        "headWeightGram": float(d.head_weight_gram) if d.head_weight_gram is not None else None,
-        "bandWeightGram": float(d.band_weight_gram) if d.band_weight_gram is not None else None,
+        "headWeightGram": dec_str(d.head_weight_gram, GRAM_Q),
+        "bandWeightGram": dec_str(d.band_weight_gram, GRAM_Q),
     }
     if for_ops:
         data.update(
             {
                 "laborCostType": d.labor_cost_type,
-                "laborCostValue": float(d.labor_cost_value),
-                "settingLaborUsd": float(d.setting_labor_usd),
+                "laborCostValue": dec_str(d.labor_cost_value, MONEY_Q),
+                "settingLaborUsd": dec_str(d.setting_labor_usd, MONEY_Q),
             }
         )
     return data
@@ -316,7 +321,7 @@ def serialize_loose_stone_detail(d: LooseStoneDetail, *, for_ops: bool = False) 
     data = {
         "stoneCategory": d.stone_category,
         "shape": d.shape,
-        "carat": float(d.carat),
+        "carat": dec_str(d.carat, CARAT_Q),
         "color": d.color,
         "clarity": d.clarity,
         "cutGrade": d.cut_grade,
@@ -324,16 +329,16 @@ def serialize_loose_stone_detail(d: LooseStoneDetail, *, for_ops: bool = False) 
         "certNumber": d.cert_number,
         "certUrl": d.cert_url,
         "measurementsMm": d.measurements_mm,
-        "lengthMm": float(d.length_mm) if d.length_mm is not None else None,
-        "widthMm": float(d.width_mm) if d.width_mm is not None else None,
-        "depthMm": float(d.depth_mm) if d.depth_mm is not None else None,
+        "lengthMm": dec_str(d.length_mm, MONEY_Q),
+        "widthMm": dec_str(d.width_mm, MONEY_Q),
+        "depthMm": dec_str(d.depth_mm, MONEY_Q),
     }
     if for_ops:
         data.update(
             {
-                "rapaportPriceUsd": float(d.rapaport_price_usd) if d.rapaport_price_usd is not None else None,
-                "discountPercent": float(d.discount_percent) if d.discount_percent is not None else None,
-                "netCostUsd": float(d.net_cost_usd),
+                "rapaportPriceUsd": dec_str(d.rapaport_price_usd, MONEY_Q),
+                "discountPercent": dec_str(d.discount_percent, MONEY_Q),
+                "netCostUsd": dec_str(d.net_cost_usd, MONEY_Q),
                 "supplierId": d.supplier_id,
             }
         )

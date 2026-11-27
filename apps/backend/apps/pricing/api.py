@@ -57,7 +57,7 @@ class BuyerQuoteCreateView(APIView):
 
         organization = None
         is_ops = False
-        if channel == "B2B":
+        if channel in ("B2B", "B2B_API"):
             ctx = resolve_tenant_context(request, require_organization=True)
             organization = ctx.organization
             is_ops = ctx.is_ops

@@ -12,6 +12,7 @@ from apps.catalog.api import (
     StorefrontProductDetailView,
     StorefrontProductListView,
 )
+from apps.catalog.api.ops_products import OpsProductPublishView, OpsProductRecipePublishView
 from apps.catalog.api.ops_variants import (
     OpsCategorySummaryView,
     OpsProductMediaDetailView,
@@ -20,6 +21,13 @@ from apps.catalog.api.ops_variants import (
     OpsStoneLineListCreateView,
     OpsVariantDetailView,
     OpsVariantListCreateView,
+)
+from apps.catalog.api.supplier import (
+    OpsProductOffersView,
+    OpsSupplierOfferDecisionView,
+    SupplierOfferDetailView,
+    SupplierOfferListCreateView,
+    SupplierProductListView,
 )
 
 urlpatterns = [
@@ -47,6 +55,16 @@ urlpatterns = [
         OpsProductDetailView.as_view(),
         name="ops-product-detail",
     ),
+    path(
+        "api/v1/ops/products/<str:parent_sku>/publish",
+        OpsProductPublishView.as_view(),
+        name="ops-product-publish",
+    ),
+    path(
+        "api/v1/ops/products/<str:parent_sku>/recipe/publish",
+        OpsProductRecipePublishView.as_view(),
+        name="ops-product-recipe-publish",
+    ),
     path("api/v1/ops/variants", OpsVariantListCreateView.as_view(), name="ops-variants"),
     path(
         "api/v1/ops/variants/<uuid:variant_id>",
@@ -66,4 +84,21 @@ urlpatterns = [
         name="ops-media-detail",
     ),
     path("api/v1/ops/categories", OpsCategorySummaryView.as_view(), name="ops-categories"),
+    path("api/v1/supplier/products", SupplierProductListView.as_view(), name="supplier-products"),
+    path("api/v1/supplier/offers", SupplierOfferListCreateView.as_view(), name="supplier-offers"),
+    path(
+        "api/v1/supplier/offers/<uuid:offer_id>",
+        SupplierOfferDetailView.as_view(),
+        name="supplier-offer-detail",
+    ),
+    path(
+        "api/v1/ops/products/<str:parent_sku>/offers",
+        OpsProductOffersView.as_view(),
+        name="ops-product-offers",
+    ),
+    path(
+        "api/v1/ops/offers/<uuid:offer_id>/decision",
+        OpsSupplierOfferDecisionView.as_view(),
+        name="ops-supplier-offer-decision",
+    ),
 ]

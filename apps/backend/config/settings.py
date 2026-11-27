@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "apps.api_keys",
     "apps.idempotency",
     "apps.webhooks",
+    "apps.social_commerce",
 ]
 
 # Optional commercial module: iyzico Checkout Form for B2C card payments.
@@ -373,6 +374,7 @@ REST_FRAMEWORK = {
         "user": os.environ.get("DRF_THROTTLE_USER", "300/min"),
         "login": os.environ.get("DRF_THROTTLE_LOGIN", "10/min"),
         "api_key": os.environ.get("DRF_THROTTLE_API_KEY", "120/min"),
+        "social_attribution": os.environ.get("DRF_THROTTLE_SOCIAL_ATTRIBUTION", "30/min"),
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "EXCEPTION_HANDLER": "config.exceptions.taragold_exception_handler",

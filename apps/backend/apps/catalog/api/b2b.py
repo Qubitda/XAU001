@@ -1,19 +1,24 @@
 """B2B dealer catalog product endpoints."""
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.authorization.permissions import IsB2bOrganizationMember
-from apps.common.responses import envelope_response
+from apps.common.responses import apply_safe_ordering, envelope_response, paginated_envelope_response
 from apps.market.services import get_current_rate_snapshot
 from apps.organizations.selectors import resolve_tenant_context
+from apps.pricing.models import PricingRecipe
 from config.exceptions import DomainError
 from apps.catalog.models import ProductModel
 from .serializers import (
     _apply_filters,
+    _channel_filter,
     _products_queryset,
     serialize_b2b_product,
 )
+
+CATALOG_ORDER_FIELDS = {"createdAt": "created_at", "title": "title", "parentSku": "parent_sku"}
+
 
 class B2bProductListView(APIView):
     permission_classes = [IsB2bOrganizationMember]
@@ -21,17 +26,27 @@ class B2bProductListView(APIView):
     def get(self, request: Request):
         ctx = resolve_tenant_context(request, require_organization=True)
         rates = get_current_rate_snapshot()
-        # B2B sees central platform catalog + own organization's private catalog (ACTIVE only)
-        qs = _products_queryset().filter(
-            catalog_status=ProductModel.CatalogStatus.ACTIVE,
-        ).filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
+        channel = "B2B_API" if getattr(request, "api_key", None) is not None else "B2B"
+        has_published = Exists(
+            PricingRecipe.objects.filter(product=OuterRef("pk"), status=PricingRecipe.Status.PUBLISHED)
+        )
+        # B2B sees central platform catalog + own organization's private catalog (ACTIVE + channel)
+        qs = _channel_filter(
+            _products_queryset()
+            .filter(catalog_status=ProductModel.CatalogStatus.ACTIVE)
+            .filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
+            .filter(has_published),
+            channel,
+        )
         qs = _apply_filters(qs, request)
-        payload = [
-            serialize_b2b_product(p, p.published_recipes[0] if p.published_recipes else None, rates)
-            for p in qs
-            if p.published_recipes
-        ]
-        return envelope_response(payload, request)
+        qs = apply_safe_ordering(qs, request, allowed_fields=CATALOG_ORDER_FIELDS, default="-created_at")
+        return paginated_envelope_response(
+            qs,
+            request,
+            lambda p: serialize_b2b_product(p, p.published_recipes[0], rates),
+            default_page_size=24,
+            max_page_size=100,
+        )
 
 
 class B2bProductDetailView(APIView):
@@ -40,13 +55,17 @@ class B2bProductDetailView(APIView):
     def get(self, request: Request, parent_sku: str):
         ctx = resolve_tenant_context(request, require_organization=True)
         rates = get_current_rate_snapshot()
+        channel = "B2B_API" if getattr(request, "api_key", None) is not None else "B2B"
         product = (
-            _products_queryset()
-            .filter(
-                catalog_status=ProductModel.CatalogStatus.ACTIVE,
+            _channel_filter(
+                _products_queryset()
+                .filter(
+                    catalog_status=ProductModel.CatalogStatus.ACTIVE,
+                )
+                .filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
+                .filter(parent_sku=parent_sku),
+                channel,
             )
-            .filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
-            .filter(parent_sku=parent_sku)
             .first()
         )
         if product is None or not product.published_recipes:

@@ -293,6 +293,19 @@ def complete_manual_bank_refund(
 
     if payment.status == PaymentTransaction.Status.REFUNDED:
         order = payment.order
+    elif payment.status == PaymentTransaction.Status.PARTIAL_REFUNDED:
+        try:
+            from apps.social_commerce.services import adjust_affiliate_conversion_for_partial_refund
+
+            adjust_affiliate_conversion_for_partial_refund(
+                order_no=payment.order.order_no,
+                refunded_amount_try=amt,
+                refund_reference=f"bank_refund:{payment.id}:{payment.refunded_amount}",
+            )
+        except Exception:
+            logger.exception("social_commerce manual partial refund hook failed order=%s", payment.order.order_no)
+
+    if payment.status == PaymentTransaction.Status.REFUNDED:
         if order.status not in (B2cOrder.Status.CANCELLED, B2cOrder.Status.REFUNDED):
             order.status = B2cOrder.Status.REFUNDED
             order.save(update_fields=["status", "updated_at"])

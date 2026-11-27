@@ -99,4 +99,32 @@ def send_channel_message(
             logger.exception("messaging webhook failed channel=%s", channel)
             return {"ok": False, "provider": "webhook", "provider_ref": "", "error": str(exc)[:500]}
 
+    if mode == "whatsapp_cloud" and channel == "WHATSAPP":
+        from .whatsapp_client import send_whatsapp_template, send_whatsapp_text
+
+        token = (getattr(settings, "WHATSAPP_CLOUD_ACCESS_TOKEN", None) or "").strip()
+        phone_id = (getattr(settings, "WHATSAPP_CLOUD_PHONE_NUMBER_ID", None) or "").strip()
+        if template_key and (context or {}).get("useTemplate"):
+            res = send_whatsapp_template(
+                access_token=token,
+                phone_number_id=phone_id,
+                recipient_id=to,
+                template_name=template_key,
+                language_code=str((context or {}).get("languageCode") or "tr"),
+                components=(context or {}).get("components"),
+            )
+        else:
+            res = send_whatsapp_text(
+                access_token=token,
+                phone_number_id=phone_id,
+                recipient_id=to,
+                body=body,
+            )
+        return {
+            "ok": res.ok,
+            "provider": "whatsapp_cloud",
+            "provider_ref": res.external_id,
+            "error": res.error,
+        }
+
     return {"ok": False, "provider": mode, "provider_ref": "", "error": "UNKNOWN_PROVIDER"}

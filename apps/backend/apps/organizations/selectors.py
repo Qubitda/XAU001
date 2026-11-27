@@ -86,11 +86,9 @@ def resolve_tenant_context(
                 branch = allowed_branches[0]
 
         if membership is not None:
-            from apps.common.security import sanitize_permissions
+            from apps.authorization.permissions import resolve_membership_permissions
 
-            base_perms = ROLE_PERMISSIONS.get(membership.role_key, frozenset())
-            extra_perms = frozenset(sanitize_permissions(membership.custom_permissions))
-            perms = base_perms | extra_perms
+            perms = frozenset(resolve_membership_permissions(membership))
         else:
             perms = ROLE_PERMISSIONS[OrganizationMembership.RoleKey.B2C_CUSTOMER]
 
@@ -246,11 +244,9 @@ def resolve_tenant_context(
                 status_code=403,
             )
 
-    from apps.common.security import sanitize_permissions
+    from apps.authorization.permissions import resolve_membership_permissions
 
-    base_perms = ROLE_PERMISSIONS.get(active.role_key, frozenset())
-    extra_perms = frozenset(sanitize_permissions(active.custom_permissions))
-    perms = base_perms | extra_perms
+    perms = frozenset(resolve_membership_permissions(active))
     return TenantContext(
         user=user,
         membership=active,

@@ -71,10 +71,9 @@ def _serialize_session(request: Request) -> dict:
             if m.default_branch_id and str(m.default_branch_id) in allowed_branch_ids
             else (allowed_branch_ids[0] if allowed_branch_ids else None)
         )
-        effective_perms = sorted(
-            set(ROLE_PERMISSIONS.get(m.role_key, set()))
-            | set(sanitize_permissions(m.custom_permissions))
-        )
+        from apps.authorization.permissions import resolve_membership_permissions
+
+        effective_perms = resolve_membership_permissions(m)
         membership_payload.append(
             {
                 "id": str(m.id),

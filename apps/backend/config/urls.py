@@ -45,6 +45,8 @@ from apps.commerce.api import (
 from apps.commerce.dyo_api import (
     B2bCompatibleStonesView,
     B2bDyoBundleCreateView,
+    B2bDyoBundleDetailView,
+    B2bDyoValidateView,
     CompatibleStonesView,
     DyoBundleCreateView,
     DyoBundleDetailView,
@@ -139,6 +141,8 @@ from apps.organizations.api import (
     OpsMembershipListCreateView,
     OpsOrganizationDetailView,
     OpsOrganizationListCreateView,
+    OrgMembershipDetailView,
+    OrgMembershipListCreateView,
 )
 from apps.organizations.partner_api import (
     OpsOrganizationAddressDetailView,
@@ -279,9 +283,9 @@ urlpatterns = [
     # B2B commerce
     path("api/v1/b2b/quotes", BuyerQuoteCreateView.as_view(), name="b2b-quotes"),
     path("api/v1/b2b/dyo/compatible-stones", B2bCompatibleStonesView.as_view(), name="b2b-dyo-stones"),
-    path("api/v1/b2b/dyo/validate", DyoValidateView.as_view(), name="b2b-dyo-validate"),
+    path("api/v1/b2b/dyo/validate", B2bDyoValidateView.as_view(), name="b2b-dyo-validate"),
     path("api/v1/b2b/dyo/bundles", B2bDyoBundleCreateView.as_view(), name="b2b-dyo-bundles"),
-    path("api/v1/b2b/dyo/bundles/<uuid:bundle_id>", DyoBundleDetailView.as_view(), name="b2b-dyo-bundle"),
+    path("api/v1/b2b/dyo/bundles/<uuid:bundle_id>", B2bDyoBundleDetailView.as_view(), name="b2b-dyo-bundle"),
     path("api/v1/b2b/draft", B2bDraftView.as_view(), name="b2b-draft"),
     path(
         "api/v1/b2b/draft/proforma.pdf",
@@ -393,6 +397,12 @@ urlpatterns = [
         "api/v1/ops/memberships/<uuid:membership_id>",
         OpsMembershipDetailView.as_view(),
         name="ops-membership-detail",
+    ),
+    path("api/v1/org/memberships", OrgMembershipListCreateView.as_view(), name="org-memberships"),
+    path(
+        "api/v1/org/memberships/<uuid:membership_id>",
+        OrgMembershipDetailView.as_view(),
+        name="org-membership-detail",
     ),
     path("api/v1/ops/customers", OpsCustomerListCreateView.as_view(), name="ops-customers"),
     path(
@@ -790,6 +800,10 @@ if getattr(django_settings, "ENABLE_IYZICO_PAYMENTS", False):
             name="iyzico-webhook-alias",
         ),
     ]
+
+urlpatterns += [
+    path("api/v1/", include("apps.social_commerce.urls")),
+]
 
 # Partner logos/documents are served only via authenticated OPS API endpoints.
 # Do not mount public /media/ static serving — that exposes uploaded files by URL.

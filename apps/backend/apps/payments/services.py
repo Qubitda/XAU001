@@ -26,6 +26,7 @@ from .iyzico_client import (
     initialize_checkout_form,
     refund_payment_item,
     retrieve_checkout_form,
+    retrieve_payment,
 )
 from .models import PaymentTransaction, RefundLog, RefundRequest
 from .payload_builder import build_checkout_form_request
@@ -90,13 +91,20 @@ def _apply_card_fields(tx: PaymentTransaction, retrieve: dict[str, Any]) -> list
     return fields
 
 
+def _order_recipient_and_name(order: B2cOrder) -> tuple[str, str]:
+    recipient = (order.shipping_email or (order.customer.email if order.customer_id else "") or "").strip()
+    name = (order.shipping_full_name or (order.customer.full_name if order.customer_id else "") or "").strip()
+    return recipient, name
+
+
 def _emit_payment_failed_mail(order: B2cOrder, *, reason: str = "") -> None:
     try:
         from apps.mail.events import emit_payment_failed
 
+        recipient, customer_name = _order_recipient_and_name(order)
         emit_payment_failed(
-            recipient=order.customer_email or "",
-            customer_name=order.customer_name or "",
+            recipient=recipient,
+            customer_name=customer_name,
             order_no=order.order_no,
             amount=str(order.grand_total_try),
             currency="TRY",
@@ -110,9 +118,10 @@ def _emit_payment_refunded_mail(order: B2cOrder, *, refund_amount: Decimal, kind
     try:
         from apps.mail.events import emit_payment_refunded
 
+        recipient, customer_name = _order_recipient_and_name(order)
         emit_payment_refunded(
-            recipient=order.customer_email or "",
-            customer_name=order.customer_name or "",
+            recipient=recipient,
+            customer_name=customer_name,
             order_no=order.order_no,
             refund_amount=str(refund_amount),
             currency="TRY",
@@ -309,11 +318,65 @@ def handle_iyzico_callback(*, token: str, raw_payload: dict | None = None) -> Ht
     )
 
 
+def _verify_webhook_with_iyzico(tx: PaymentTransaction) -> dict[str, Any] | None:
+    """Server-to-server cross-check against iyzico before trusting webhook state changes."""
+    retrieve: dict[str, Any] | None = None
+    try:
+        if tx.payment_id:
+            retrieve = _wrap_iyzico_call(
+                retrieve_payment,
+                payment_id=tx.payment_id,
+                conversation_id=tx.conversation_id,
+            )
+        elif tx.token:
+            retrieve = _wrap_iyzico_call(retrieve_checkout_form, tx.token)
+        else:
+            return None
+    except DomainError:
+        logger.exception("webhook server-to-server retrieve failed for %s", tx.conversation_id)
+        return None
+
+    conv = str(retrieve.get("conversationId") or "")
+    if conv and conv != tx.conversation_id:
+        logger.warning(
+            "webhook conversationId mismatch for tx=%s got=%s",
+            tx.conversation_id,
+            conv,
+        )
+        return None
+    return retrieve
+
+
+def _retrieve_confirms_refund_or_cancel(retrieve: dict[str, Any], *, is_cancel: bool) -> bool:
+    if str(retrieve.get("status") or "").lower() != "success":
+        return False
+    p_status = str(retrieve.get("paymentStatus") or "").upper()
+    if is_cancel and p_status == "CANCELLED":
+        return True
+    if not is_cancel and p_status in ("REFUNDED", "PARTIAL_REFUNDED", "CANCELLED"):
+        return True
+    if retrieve.get("fraudStatus") == -1:
+        return True
+    for item in retrieve.get("itemTransactions") or []:
+        if not isinstance(item, dict):
+            continue
+        it_status = str(item.get("itemTransactionStatus") or "").upper()
+        if item.get("transactionStatus") == 0 or it_status in ("CANCELLED", "REFUNDED"):
+            return True
+        try:
+            if Decimal(str(item.get("refundedAmount") or "0")) > 0:
+                return True
+        except Exception:
+            pass
+    return False
+
+
 @transaction.atomic
 def handle_iyzico_webhook(*, payload: dict) -> dict[str, Any]:
     """
     Secondary confirmation + panel-side cancel/refund sync.
-    Primary authority for first-time success remains CF retrieve on callback.
+    All state transitions (SUCCESS, FAILURE, REFUND, CANCEL, CHARGEBACK) are verified
+    server-to-server against iyzico before mutating PaymentTransaction or B2cOrder.
     """
     payment_id = str(payload.get("paymentId") or "")
     conversation_id = str(
@@ -345,36 +408,70 @@ def handle_iyzico_webhook(*, payload: dict) -> dict[str, Any]:
     tx.raw_webhook_payload = payload
     update_fields = ["raw_webhook_payload", "updated_at"]
 
-    # Panel refund / cancel notifications
+    # Panel refund / cancel notifications — MUST be verified server-to-server
     if any(k in event_type or k in status for k in ("REFUND", "CANCEL", "CHARGEBACK")):
+        if tx.status in (PaymentTransaction.Status.CANCELLED, PaymentTransaction.Status.REFUNDED):
+            tx.save(update_fields=list(dict.fromkeys(update_fields)))
+            return {"ok": True, "matched": True, "idempotent": True}
+
+        retrieve = _verify_webhook_with_iyzico(tx)
+        is_cancel = "CANCEL" in event_type or "CANCEL" in status
+        if retrieve is None or not _retrieve_confirms_refund_or_cancel(retrieve, is_cancel=is_cancel):
+            logger.warning("unverified refund/cancel webhook ignored for %s", tx.conversation_id)
+            tx.save(update_fields=list(dict.fromkeys(update_fields)))
+            return {"ok": True, "matched": True, "verified": False}
+
+        tx.raw_retrieve_response = retrieve
+        update_fields.append("raw_retrieve_response")
+
+        item_refunded_total = Decimal("0.00")
+        for item in retrieve.get("itemTransactions") or []:
+            if isinstance(item, dict) and item.get("refundedAmount") is not None:
+                try:
+                    item_refunded_total += Decimal(str(item["refundedAmount"]))
+                except Exception:
+                    pass
+
         amount_raw = payload.get("refundPrice") or payload.get("price") or payload.get("paidPrice")
         try:
-            amount = Decimal(str(amount_raw)) if amount_raw is not None else tx.paid_price
+            payload_amount = Decimal(str(amount_raw)) if amount_raw is not None else tx.refundable_amount
         except Exception:
-            amount = tx.refundable_amount
-        if "CANCEL" in event_type or "CANCEL" in status:
+            payload_amount = tx.refundable_amount
+
+        if is_cancel:
             tx.status = PaymentTransaction.Status.CANCELLED
             tx.refunded_amount = tx.paid_price
+            refund_delta = tx.paid_price
         else:
-            tx.refunded_amount = min(tx.paid_price, tx.refunded_amount + amount)
+            if item_refunded_total > 0:
+                new_refunded = min(tx.paid_price, item_refunded_total)
+                refund_delta = max(Decimal("0.00"), new_refunded - tx.refunded_amount)
+                tx.refunded_amount = new_refunded
+            else:
+                refund_delta = max(Decimal("0.00"), min(tx.refundable_amount, payload_amount))
+                tx.refunded_amount = min(tx.paid_price, tx.refunded_amount + refund_delta)
             tx.status = (
                 PaymentTransaction.Status.REFUNDED
                 if tx.refunded_amount >= tx.paid_price
                 else PaymentTransaction.Status.PARTIAL_REFUNDED
             )
+            if refund_delta <= 0:
+                tx.save(update_fields=list(dict.fromkeys(update_fields)))
+                return {"ok": True, "matched": True, "idempotent": True}
+
         update_fields.extend(["status", "refunded_amount"])
-        tx.save(update_fields=update_fields)
-        _mark_order_refunded(tx.order, full=tx.status in (
-            PaymentTransaction.Status.REFUNDED,
-            PaymentTransaction.Status.CANCELLED,
-        ))
-        _emit_payment_refunded_mail(tx.order, refund_amount=amount, kind=event_type or status)
-        return {"ok": True, "matched": True, "synced": "refund_or_cancel"}
+        tx.save(update_fields=list(dict.fromkeys(update_fields)))
+        _mark_order_refunded(
+            tx.order,
+            full=tx.status in (PaymentTransaction.Status.REFUNDED, PaymentTransaction.Status.CANCELLED),
+        )
+        _emit_payment_refunded_mail(tx.order, refund_amount=refund_delta, kind=event_type or status)
+        return {"ok": True, "matched": True, "synced": "refund_or_cancel", "verified": True}
 
     if status == "SUCCESS" and tx.status != PaymentTransaction.Status.SUCCESS:
         if tx.token:
-            try:
-                retrieve = _wrap_iyzico_call(retrieve_checkout_form, tx.token)
+            retrieve = _verify_webhook_with_iyzico(tx)
+            if retrieve is not None:
                 tx.raw_retrieve_response = retrieve
                 update_fields.append("raw_retrieve_response")
                 update_fields.extend(_apply_card_fields(tx, retrieve))
@@ -387,9 +484,7 @@ def handle_iyzico_webhook(*, payload: dict) -> dict[str, Any]:
                     tx.save(update_fields=list(dict.fromkeys(update_fields)))
                     finalize_b2c_order_after_payment(order=tx.order)
                     return {"ok": True, "matched": True, "finalized": True}
-            except DomainError:
-                logger.exception("webhook retrieve failed for %s", tx.conversation_id)
-        tx.save(update_fields=update_fields)
+        tx.save(update_fields=list(dict.fromkeys(update_fields)))
         return {"ok": True, "matched": True, "finalized": False}
 
     if status == "FAILURE" and tx.status not in (
@@ -398,14 +493,24 @@ def handle_iyzico_webhook(*, payload: dict) -> dict[str, Any]:
         PaymentTransaction.Status.CANCELLED,
         PaymentTransaction.Status.REFUNDED,
     ):
+        retrieve = _verify_webhook_with_iyzico(tx)
+        if retrieve is None or (
+            str(retrieve.get("paymentStatus") or "").upper() != "FAILURE"
+            and str(retrieve.get("status") or "").lower() != "failure"
+        ):
+            logger.warning("unverified FAILURE webhook ignored for %s", tx.conversation_id)
+            tx.save(update_fields=list(dict.fromkeys(update_fields)))
+            return {"ok": True, "matched": True, "verified": False}
+
+        tx.raw_retrieve_response = retrieve
         tx.status = PaymentTransaction.Status.FAILURE
-        update_fields.append("status")
-        tx.save(update_fields=update_fields)
+        update_fields.extend(["raw_retrieve_response", "status"])
+        tx.save(update_fields=list(dict.fromkeys(update_fields)))
         fail_b2c_pending_payment_order(order=tx.order)
         _emit_payment_failed_mail(tx.order, reason="webhook_failure")
-        return {"ok": True, "matched": True, "failed": True}
+        return {"ok": True, "matched": True, "failed": True, "verified": True}
 
-    tx.save(update_fields=update_fields)
+    tx.save(update_fields=list(dict.fromkeys(update_fields)))
     return {"ok": True, "matched": True}
 
 
@@ -566,6 +671,17 @@ def refund_payment_transaction(
     _mark_order_refunded(
         payment.order, full=payment.status == PaymentTransaction.Status.REFUNDED
     )
+    if payment.status == PaymentTransaction.Status.PARTIAL_REFUNDED:
+        try:
+            from apps.social_commerce.services import adjust_affiliate_conversion_for_partial_refund
+
+            adjust_affiliate_conversion_for_partial_refund(
+                order_no=payment.order.order_no,
+                refunded_amount_try=refund_amt,
+                refund_reference=f"pay_refund_log:{log.id}",
+            )
+        except Exception:
+            logger.exception("social_commerce partial refund hook failed order=%s", payment.order.order_no)
     if refund_request:
         refund_request.status = RefundRequest.Status.COMPLETED
         refund_request.reviewed_by = actor

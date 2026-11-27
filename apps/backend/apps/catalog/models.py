@@ -1,4 +1,6 @@
 from decimal import Decimal
+import uuid
+
 from django.conf import settings
 from django.db import models
 from apps.common.models import TimestampedModel
@@ -66,7 +68,12 @@ class ProductModel(TimestampedModel):
         db_index=True,
     )
     # Legacy label (urun_tipi); kept during dual-write
-    product_type = models.CharField(max_length=80, blank=True, default="Kuyum (Bitmiş Ürün)")
+    product_type = models.CharField(
+        max_length=80,
+        blank=True,
+        default="Kuyum (Bitmiş Ürün)",
+        help_text="[DEPRECATED - use product_kind]",
+    )
 
     collection = models.CharField(max_length=120, db_index=True)
     category = models.CharField(max_length=80, db_index=True)
@@ -85,48 +92,61 @@ class ProductModel(TimestampedModel):
     stock_status = models.CharField(
         max_length=24, choices=StockStatus.choices, default=StockStatus.IN_STOCK
     )
-    stock_qty = models.PositiveIntegerField(default=1)
+    stock_qty = models.PositiveIntegerField(default=0)
     # Catalog visibility — independent of pricing recipe publish status.
     catalog_status = models.CharField(
         max_length=16,
         choices=CatalogStatus.choices,
-        default=CatalogStatus.ACTIVE,
+        default=CatalogStatus.DRAFT,
         db_index=True,
     )
     lead_time_days = models.PositiveSmallIntegerField(default=2)
     # Hardcoded sales channels: B2B / B2B_API / B2C_API
     sales_channels = models.JSONField(default=list, blank=True)
 
-    # Default metal & Montür specification
-    metal_name = models.CharField(max_length=40, default="Altın")
-    purity_code = models.CharField(max_length=16, default="14K")
-    metal_color = models.CharField(max_length=64, default="Beyaz")
+    # Default metal & Montür specification (DEPRECATED: canonical fields live on *Detail + ProductVariant)
+    _DEPRECATED_DETAIL_HELP = "[DEPRECATED - use *Detail / ProductVariant]"
+    metal_name = models.CharField(max_length=40, default="Altın", help_text=_DEPRECATED_DETAIL_HELP)
+    purity_code = models.CharField(max_length=16, default="14K", help_text=_DEPRECATED_DETAIL_HELP)
+    metal_color = models.CharField(max_length=64, default="Beyaz", help_text=_DEPRECATED_DETAIL_HELP)
     available_colors = models.JSONField(default=list)
-    gross_weight_gram = models.DecimalField(max_digits=10, decimal_places=4, default=Decimal("3.0000"))
-    fire_rate_pct = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("2.00"))
-
-    # Montür FULL vs HEAD+BAND + allowed carat range
-    mount_structure = models.CharField(
-        max_length=16, choices=MountStructure.choices, default=MountStructure.FULL
+    gross_weight_gram = models.DecimalField(
+        max_digits=10, decimal_places=4, default=Decimal("3.0000"), help_text=_DEPRECATED_DETAIL_HELP
     )
-    allowed_carat_min = models.DecimalField(max_digits=6, decimal_places=3, default=Decimal("0.100"))
-    allowed_carat_max = models.DecimalField(max_digits=6, decimal_places=3, default=Decimal("2.000"))
-    head_code = models.CharField(max_length=48, blank=True, default="")
-    band_code = models.CharField(max_length=48, blank=True, default="")
-    head_weight_gram = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
-    band_weight_gram = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True)
+    fire_rate_pct = models.DecimalField(
+        max_digits=6, decimal_places=2, default=Decimal("2.00"), help_text=_DEPRECATED_DETAIL_HELP
+    )
 
-    # Certificate & physical dimensions
-    stone_type = models.CharField(max_length=48, default="Pırlanta")
-    stone_measure_unit = models.CharField(max_length=8, default="ct")
-    stone_clarity = models.CharField(max_length=24, blank=True, default="VS1")
-    stone_color_grade = models.CharField(max_length=24, blank=True, default="F")
-    stone_cut_grade = models.CharField(max_length=32, blank=True, default="Excellent")
-    stone_cut_shape = models.CharField(max_length=64, blank=True, default="Yuvarlak (Round)")
-    stone_origin = models.CharField(max_length=48, blank=True, default="Doğal")
-    setting_type = models.CharField(max_length=64, blank=True, default="6 Tırnak")
-    certificate_agency = models.CharField(max_length=32, blank=True, default="GIA")
-    certificate_number = models.CharField(max_length=64, blank=True, default="")
+    # Montür FULL vs HEAD+BAND + allowed carat range (DEPRECATED: use MountingDetail)
+    mount_structure = models.CharField(
+        max_length=16, choices=MountStructure.choices, default=MountStructure.FULL, help_text=_DEPRECATED_DETAIL_HELP
+    )
+    allowed_carat_min = models.DecimalField(
+        max_digits=6, decimal_places=3, default=Decimal("0.100"), help_text=_DEPRECATED_DETAIL_HELP
+    )
+    allowed_carat_max = models.DecimalField(
+        max_digits=6, decimal_places=3, default=Decimal("2.000"), help_text=_DEPRECATED_DETAIL_HELP
+    )
+    head_code = models.CharField(max_length=48, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    band_code = models.CharField(max_length=48, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    head_weight_gram = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True, help_text=_DEPRECATED_DETAIL_HELP
+    )
+    band_weight_gram = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True, help_text=_DEPRECATED_DETAIL_HELP
+    )
+
+    # Certificate & physical dimensions (DEPRECATED: use LooseStoneDetail / StoneLine)
+    stone_type = models.CharField(max_length=48, default="Pırlanta", help_text=_DEPRECATED_DETAIL_HELP)
+    stone_measure_unit = models.CharField(max_length=8, default="ct", help_text=_DEPRECATED_DETAIL_HELP)
+    stone_clarity = models.CharField(max_length=24, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    stone_color_grade = models.CharField(max_length=24, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    stone_cut_grade = models.CharField(max_length=32, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    stone_cut_shape = models.CharField(max_length=64, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    stone_origin = models.CharField(max_length=48, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    setting_type = models.CharField(max_length=64, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    certificate_agency = models.CharField(max_length=32, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
+    certificate_number = models.CharField(max_length=64, blank=True, default="", help_text=_DEPRECATED_DETAIL_HELP)
 
     variant_size = models.PositiveSmallIntegerField(default=14)
     available_sizes = models.JSONField(default=list)
@@ -373,3 +393,61 @@ class Favorite(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.user.email} ♥ {self.product.parent_sku}"
+
+
+class SupplierOffer(TimestampedModel):
+    """
+    Supplier fulfillment offer for a catalog ProductModel (optionally scoped to a ProductVariant).
+    Blind-pool rule: buyers only ever see anonymous `offer_ref` UUID + `lead_time_days` + `in_stock`;
+    supplier identity (`supplier_organization`, `supplier_sku`) and `cost_amount` are strictly OPS/Supplier only.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Taslak"
+        SUBMITTED = "SUBMITTED", "Onay Bekliyor"
+        APPROVED = "APPROVED", "Onaylandı"
+        REJECTED = "REJECTED", "Reddedildi"
+        INACTIVE = "INACTIVE", "Pasif"
+
+    product = models.ForeignKey(ProductModel, on_delete=models.CASCADE, related_name="supplier_offers")
+    variant = models.ForeignKey(
+        ProductVariant, on_delete=models.CASCADE, null=True, blank=True, related_name="supplier_offers"
+    )
+    supplier_organization = models.ForeignKey(
+        "organizations.Organization", on_delete=models.CASCADE, related_name="supplier_offers"
+    )
+    offer_ref = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, db_index=True)
+    supplier_sku = models.CharField(max_length=64, blank=True, default="")
+    cost_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=8, default="USD")
+    lead_time_days = models.PositiveSmallIntegerField(default=3)
+    available_qty = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.SUBMITTED, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    notes = models.TextField(blank=True, default="")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_supplier_offers",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "catalog_supplier_offer"
+        ordering = ["cost_amount", "lead_time_days", "-created_at"]
+        indexes = [
+            models.Index(fields=["product", "status", "is_active"], name="idx_sup_offer_prod_status"),
+            models.Index(fields=["supplier_organization", "status"], name="idx_sup_offer_org_status"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "variant", "supplier_organization"],
+                condition=models.Q(is_active=True),
+                name="uniq_active_supplier_offer_prod_var_org",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product.parent_sku} · {self.offer_ref} ({self.status})"

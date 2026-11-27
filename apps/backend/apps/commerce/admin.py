@@ -10,9 +10,16 @@ from .models import (
     B2bDraftLine,
     B2bOrder,
     B2bOrderLine,
+    B2cCart,
     B2cCartItem,
     B2cOrder,
     B2cOrderItem,
+    CartEvent,
+    CartRecoveryAttempt,
+    CartRecoverySession,
+    CustomBundle,
+    OpsSalesTask,
+    StoneSoftLock,
 )
 from .services import transition_b2b_order_status, transition_b2c_order_status
 
@@ -243,3 +250,88 @@ class B2bOrderLineAdmin(ImmutableAdminMixin, admin.ModelAdmin):
     search_fields = ("order__order_no", "sku", "parent_sku", "title")
     list_select_related = ("order", "variant", "rate_snapshot", "price_quote")
     readonly_fields = tuple(f.name for f in B2bOrderLine._meta.fields)
+
+
+class CartEventInline(ReadOnlyInlineMixin, admin.TabularInline):
+    model = CartEvent
+    fields = ("event_type", "source", "occurred_at", "idempotency_key")
+    readonly_fields = fields
+
+
+class CartRecoveryAttemptInline(ReadOnlyInlineMixin, admin.TabularInline):
+    model = CartRecoveryAttempt
+    fields = ("stage", "channel", "template_key", "status", "skip_reason", "created_at")
+    readonly_fields = fields
+
+
+class StoneSoftLockInline(ReadOnlyInlineMixin, admin.TabularInline):
+    model = StoneSoftLock
+    fields = ("stone_product", "user", "status", "expires_at")
+    readonly_fields = fields
+
+
+@admin.register(B2cCart)
+class B2cCartAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("external_id", "user", "customer", "guest_email", "status", "checkout_state", "total_try", "line_count", "last_activity_at")
+    list_filter = ("status", "checkout_state", "currency")
+    search_fields = ("external_id", "user__email", "customer__full_name", "guest_email")
+    list_select_related = ("user", "customer", "converted_order")
+    readonly_fields = ("id", "created_at", "updated_at")
+    inlines = (CartEventInline,)
+
+
+@admin.register(CartEvent)
+class CartEventAdmin(ImmutableAdminMixin, admin.ModelAdmin):
+    list_display = ("cart", "event_type", "source", "occurred_at", "idempotency_key")
+    list_filter = ("event_type", "source")
+    search_fields = ("cart__external_id", "idempotency_key")
+    list_select_related = ("cart",)
+    readonly_fields = tuple(f.name for f in CartEvent._meta.fields)
+
+
+@admin.register(CartRecoverySession)
+class CartRecoverySessionAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("segment", "user", "guest_email", "organization", "status", "stage", "cart_value_try", "last_touch_at")
+    list_filter = ("segment", "status", "stage", "suppress_reason")
+    search_fields = ("user__email", "guest_email", "organization__code", "first_item_title")
+    list_select_related = ("user", "organization")
+    readonly_fields = ("id", "created_at", "updated_at")
+    inlines = (CartRecoveryAttemptInline,)
+
+
+@admin.register(CartRecoveryAttempt)
+class CartRecoveryAttemptAdmin(ImmutableAdminMixin, admin.ModelAdmin):
+    list_display = ("session", "stage", "channel", "template_key", "status", "skip_reason", "created_at")
+    list_filter = ("stage", "channel", "status")
+    search_fields = ("session__guest_email", "session__user__email", "template_key", "provider_ref")
+    list_select_related = ("session",)
+    readonly_fields = tuple(f.name for f in CartRecoveryAttempt._meta.fields)
+
+
+@admin.register(CustomBundle)
+class CustomBundleAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("id", "user", "audience", "mounting_product", "stone_product", "status", "expires_at", "created_at")
+    list_filter = ("audience", "status")
+    search_fields = ("user__email", "mounting_product__parent_sku", "stone_product__parent_sku")
+    list_select_related = ("user", "mounting_product", "stone_product")
+    readonly_fields = ("id", "created_at", "updated_at")
+    inlines = (StoneSoftLockInline,)
+
+
+@admin.register(StoneSoftLock)
+class StoneSoftLockAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("stone_product", "user", "bundle", "status", "expires_at", "created_at")
+    list_filter = ("status",)
+    search_fields = ("stone_product__parent_sku", "user__email")
+    list_select_related = ("stone_product", "user", "bundle")
+    readonly_fields = ("id", "created_at", "updated_at")
+
+
+@admin.register(OpsSalesTask)
+class OpsSalesTaskAdmin(OpsRestrictedAdminMixin, admin.ModelAdmin):
+    list_display = ("kind", "segment", "status", "user", "guest_email", "organization", "cart_value_try", "due_at")
+    list_filter = ("kind", "segment", "status")
+    search_fields = ("user__email", "guest_email", "organization__code", "script_key")
+    list_select_related = ("user", "organization", "completed_by")
+    date_hierarchy = "due_at"
+    readonly_fields = ("id", "created_at", "updated_at")
