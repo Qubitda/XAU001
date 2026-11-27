@@ -21,6 +21,7 @@ interface FeaturedAndNewSectionProps {
   items: ComputedStorefrontProduct[];
   isLoading: boolean;
   favoriteSkus: string[];
+  addingSku?: string | null;
   addedSku: string | null;
   onOpenProduct: (parentSku: string) => void;
   onToggleFavorite: (parentSku: string) => void;
@@ -31,6 +32,7 @@ export function FeaturedAndNewSection({
   items,
   isLoading,
   favoriteSkus,
+  addingSku = null,
   addedSku,
   onOpenProduct,
   onToggleFavorite,
@@ -315,6 +317,7 @@ export function FeaturedAndNewSection({
                   activeColor={activeColor}
                   showColorSwatches={true}
                   isFavorite={favoriteSkus.includes(entry.product.parentSku)}
+                  isAdding={addingSku === entry.product.parentSku}
                   isAdded={addedSku === entry.product.parentSku}
                   onOpen={() => onOpenProduct(entry.product.parentSku)}
                   onSelectColor={(color) =>

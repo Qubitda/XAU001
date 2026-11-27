@@ -104,7 +104,7 @@ export function DyoWizardFeatureView({ portalMode = 'b2c' }: DyoWizardFeatureVie
   const [searchParams] = useSearchParams();
   const initialMount = routeMountSku || searchParams.get('mountingSku') || '';
 
-  const { authenticated, setAuthModalOpen } = useAuth();
+  const { authenticated } = useAuth();
   const { setB2cCartOpen, setB2bOrderOpen } = useCommerceUI();
   const catalogQuery = useCatalogQuery();
   const ratesQuery = useLiveRatesQuery();
@@ -164,8 +164,8 @@ export function DyoWizardFeatureView({ portalMode = 'b2c' }: DyoWizardFeatureVie
 
   const requireAuth = () => {
     if (authenticated) return true;
-    setAuthModalOpen(true);
     setLocalError('DYO için giriş yapmanız gerekir.');
+    navigate(isB2b ? '/b2b/giris' : '/giris');
     return false;
   };
 
@@ -281,9 +281,9 @@ export function DyoWizardFeatureView({ portalMode = 'b2c' }: DyoWizardFeatureVie
         {!authenticated && (
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-[4px] border border-border bg-card">
             <p className="text-sm text-muted-foreground">Taş listesi ve sepete ekleme için oturum açın.</p>
-            <button type="button" className={TARA_PRIMARY_BTN_CLASS} onClick={() => setAuthModalOpen(true)}>
+            <Link to={isB2b ? '/b2b/giris' : '/giris'} className={TARA_PRIMARY_BTN_CLASS}>
               Giriş yap
-            </button>
+            </Link>
           </div>
         )}
 

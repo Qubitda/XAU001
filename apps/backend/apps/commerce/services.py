@@ -307,11 +307,18 @@ def add_b2c_cart_item(*, user, payload: dict) -> B2cCartItem:
     gross_gram = compute_size_adjusted_gross_weight(product, size, variant=resolved_variant)
 
     variant_stock_status = product.stock_status
-    if resolved_variant is not None and product.stock_status != ProductModel.StockStatus.MADE_TO_ORDER:
+    if product.stock_status != ProductModel.StockStatus.MADE_TO_ORDER:
+        available_qty = resolved_variant.stock_qty if resolved_variant is not None else product.stock_qty
         variant_stock_status = (
             ProductModel.StockStatus.IN_STOCK
-            if resolved_variant.stock_qty > 0
+            if available_qty > 0
             else ProductModel.StockStatus.OUT_OF_STOCK
+        )
+
+    if variant_stock_status == ProductModel.StockStatus.OUT_OF_STOCK:
+        raise CommerceError(
+            "Bu ürün veya seçilen ölçü şu anda stokta bulunmuyor.",
+            status_code=400,
         )
 
     lead_time = (

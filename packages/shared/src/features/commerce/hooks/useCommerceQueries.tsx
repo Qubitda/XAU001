@@ -36,21 +36,60 @@ export const commerceKeys = {
   favorites: () => [...commerceKeys.all, 'favorites'] as const,
 };
 
+const GUEST_FAVORITES_KEY = 'taragold_guest_favorites_v1';
+
+function readGuestFavorites(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(GUEST_FAVORITES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function toggleGuestFavorite(parentSku: string): string[] {
+  const current = readGuestFavorites();
+  const exists = current.includes(parentSku);
+  const next = exists ? current.filter((sku) => sku !== parentSku) : [...current, parentSku];
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(GUEST_FAVORITES_KEY, JSON.stringify(next));
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+  return next;
+}
+
 export function useFavoritesQuery() {
   const { authenticated } = useAuth();
   return useQuery({
-    queryKey: commerceKeys.favorites(),
-    queryFn: commerceService.listFavorites,
-    enabled: authenticated,
+    queryKey: [...commerceKeys.favorites(), authenticated ? 'auth' : 'guest'],
+    queryFn: () =>
+      authenticated ? commerceService.listFavorites() : Promise.resolve(readGuestFavorites()),
   });
 }
 
 export function useToggleFavoriteMutation() {
   const qc = useQueryClient();
+  const { authenticated } = useAuth();
   return useMutation({
-    mutationFn: (parentSku: string) => commerceService.toggleFavorite(parentSku),
+    mutationFn: (parentSku: string) =>
+      authenticated
+        ? commerceService.toggleFavorite(parentSku)
+        : Promise.resolve(toggleGuestFavorite(parentSku)),
     onSuccess: (next) => {
+      qc.setQueryData(
+        [...commerceKeys.favorites(), authenticated ? 'auth' : 'guest'],
+        next
+      );
       qc.setQueryData(commerceKeys.favorites(), next);
+    },
+    onError: () => {
+      toast.error('Favori güncellenemedi. Lütfen tekrar deneyin.');
     },
   });
 }

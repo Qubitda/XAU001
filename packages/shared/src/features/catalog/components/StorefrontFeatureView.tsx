@@ -30,7 +30,7 @@ export function StorefrontFeatureView({ portalMode }: StorefrontFeatureViewProps
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { role, setRole } = useAuth();
-  const { products, product, rates } = useActiveProductMetrics();
+  const { products: rawProducts, product, rates } = useActiveProductMetrics();
   const { setSelectedParentSku } = usePortalSelection();
   const addB2cMutation = useAddToB2cCartMutation();
   const addB2bMutation = useAddToB2bDraftMutation();
@@ -41,6 +41,10 @@ export function StorefrontFeatureView({ portalMode }: StorefrontFeatureViewProps
   const draftPieces = (b2bDraftQuery.data?.lines ?? []).reduce((s, l) => s + l.qty, 0);
 
   const effectiveRole = portalMode === 'b2b' ? 'b2b' : portalMode === 'b2c' ? 'b2c' : role;
+  const products =
+    effectiveRole === 'b2c'
+      ? rawProducts.filter((p) => p.stockStatus !== 'Tükendi')
+      : rawProducts;
   const productRoutePrefix = portalMode === 'b2b' ? '/b2b/urun' : '/urun';
 
   const initialCategory = searchParams.get('category') || 'Tümü';

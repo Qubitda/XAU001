@@ -43,6 +43,11 @@ def _catalog_card_fields(
     reels_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.VIDEO_REELS), "")
     spin_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.SPIN_360), "")
     cert_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.CERTIFICATE_PDF), "")
+    effective_stock_status = (
+        ProductModel.StockStatus.OUT_OF_STOCK
+        if product.stock_qty <= 0 and product.stock_status != ProductModel.StockStatus.MADE_TO_ORDER
+        else product.stock_status
+    )
     data = {
         "parentSku": product.parent_sku,
         "barcode": product.barcode,
@@ -62,7 +67,7 @@ def _catalog_card_fields(
         "metalColor": product.metal_color,
         "availableColors": product.available_colors or ([product.metal_color] if product.metal_color else []),
         "grossWeightGram": _dec_str(product.gross_weight_gram, GRAM_Q),
-        "stockStatus": product.stock_status,
+        "stockStatus": effective_stock_status,
         "leadTimeDays": product.lead_time_days,
         "stoneType": product.stone_type,
         "stoneMeasureUnit": product.stone_measure_unit,

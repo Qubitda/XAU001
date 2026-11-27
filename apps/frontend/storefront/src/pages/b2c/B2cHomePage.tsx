@@ -30,9 +30,13 @@ export function B2cHomePage() {
   const toggleFavorite = useToggleFavoriteMutation();
   const addB2c = useAddToB2cCartMutation();
 
+  const [addingSku, setAddingSku] = useState<string | null>(null);
   const [addedSku, setAddedSku] = useState<string | null>(null);
 
-  const products = catalogQuery.data ?? [];
+  const products = useMemo(
+    () => (catalogQuery.data ?? []).filter((p) => p.stockStatus !== 'Tükendi'),
+    [catalogQuery.data]
+  );
   const favoriteSkus = favoritesQuery.data ?? [];
 
   const computedProducts = useMemo<ComputedStorefrontProduct[]>(
@@ -52,6 +56,7 @@ export function B2cHomePage() {
   };
 
   const handleQuickAdd = (entry: ComputedStorefrontProduct) => {
+    setAddingSku(entry.product.parentSku);
     addB2c.mutate(
       buildB2cCartItemFromProduct({
         product: entry.product,
@@ -66,6 +71,9 @@ export function B2cHomePage() {
             () => setAddedSku((cur) => (cur === entry.product.parentSku ? null : cur)),
             1500
           );
+        },
+        onSettled: () => {
+          setAddingSku((cur) => (cur === entry.product.parentSku ? null : cur));
         },
       }
     );
@@ -93,6 +101,7 @@ export function B2cHomePage() {
           items={computedProducts}
           isLoading={catalogQuery.isLoading}
           favoriteSkus={favoriteSkus}
+          addingSku={addingSku}
           addedSku={addedSku}
           onOpenProduct={handleOpenProduct}
           onToggleFavorite={(sku) => toggleFavorite.mutate(sku)}

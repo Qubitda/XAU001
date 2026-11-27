@@ -97,7 +97,11 @@ class OpsProductListCreateView(APIView):
             certificate_number=d.get("certificateNumber", ""),
             gross_weight_gram=d["grossWeightGram"],
             fire_rate_pct=d["fireRatePct"],
-            stock_status=d["stockStatus"],
+            stock_status=(
+                ProductModel.StockStatus.OUT_OF_STOCK
+                if int(d["stockQty"]) <= 0 and d["stockStatus"] != ProductModel.StockStatus.MADE_TO_ORDER
+                else d["stockStatus"]
+            ),
             stock_qty=d["stockQty"],
             lead_time_days=d.get("leadTimeDays", 2),
             ownership_type=d["ownershipType"],
@@ -314,6 +318,9 @@ class OpsProductDetailView(APIView):
                 setattr(product, model_field, value)
 
         _apply_kind_fields(product, d)
+
+        if product.stock_qty <= 0 and product.stock_status != ProductModel.StockStatus.MADE_TO_ORDER:
+            product.stock_status = ProductModel.StockStatus.OUT_OF_STOCK
 
         if "seoSlug" in d and d["seoSlug"].strip():
             cleaned_slug = slugify(d["seoSlug"].strip())

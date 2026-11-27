@@ -4,7 +4,7 @@
  */
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, ChevronRight, Heart, ShoppingBag } from 'lucide-react';
+import { Check, ChevronRight, Heart, Loader2, ShoppingBag } from 'lucide-react';
 import type { ComputedJewelryMetrics, MetalColor, ProductState } from '../../../types/jewelry';
 import {
   resolveProductMedia,
@@ -153,6 +153,7 @@ interface StorefrontProductCardProps {
   media: ResolvedProductMedia;
   activeColor?: MetalColor;
   isFavorite?: boolean;
+  isAdding?: boolean;
   isAdded?: boolean;
   showColorSwatches?: boolean;
   showQuickAdd?: boolean;
@@ -169,6 +170,7 @@ export function StorefrontProductCard({
   media,
   activeColor,
   isFavorite = false,
+  isAdding = false,
   isAdded = false,
   showColorSwatches: _showColorSwatches = false,
   showQuickAdd = true,
@@ -204,7 +206,7 @@ export function StorefrontProductCard({
 
   const articleClass = isCollectionLayout
     ? 'group flex h-full flex-col gap-3'
-    : 'group bg-card border border-border rounded-md overflow-hidden flex h-full flex-col hover:border-ring transition-colors';
+    : 'group bg-card border border-border/50 rounded-lg overflow-hidden flex h-full flex-col transition-shadow duration-300 hover:shadow-[0_10px_30px_rgba(23,23,23,0.06)]';
 
   const mediaImages = !imgFailed && resolvedMedia.mainUrl ? (
     <>
@@ -247,26 +249,30 @@ export function StorefrontProductCard({
     showQuickAdd && metrics.ledger.hasB2cChannel && onQuickAdd ? (
       <button
         type="button"
-        disabled={isOutOfStock}
+        disabled={isOutOfStock || isAdding}
+        aria-busy={isAdding}
         onClick={(e) => {
           e.stopPropagation();
           onQuickAdd();
         }}
         className={cn(
-          TARA_SUCCESS_BTN_CLASS,
-          isCollectionLayout ? 'w-full h-9 min-h-9 px-3.5' : 'shrink-0 min-h-[38px] px-3'
+          'inline-flex items-center justify-center gap-1.5 h-10 min-h-10 rounded-[8px] bg-[#242321] text-white text-xs font-medium leading-none tracking-[0.01em] hover:bg-[#393530] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-45 disabled:pointer-events-none transition-colors duration-150 cursor-pointer whitespace-nowrap',
+          isCollectionLayout ? 'w-full px-4' : 'shrink-0 w-[116px] px-3'
         )}
       >
-        {isAdded ? (
+        {isAdding ? (
           <>
-            <Check className="w-3.5 h-3.5" aria-hidden="true" />
+            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" aria-hidden="true" />
+            <span>Ekleniyor</span>
+          </>
+        ) : isAdded ? (
+          <>
+            <Check className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Eklendi</span>
           </>
-        ) : isCollectionLayout ? (
-          <span>Sepete Ekle</span>
         ) : (
           <>
-            <ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" />
+            <ShoppingBag className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             <span>Sepete Ekle</span>
           </>
         )}
@@ -295,8 +301,8 @@ export function StorefrontProductCard({
               onToggleFavorite();
             }}
             className={cn(
-              'absolute top-3 right-3 z-30 min-w-11 min-h-11 w-11 h-11 rounded-full bg-card/95 border border-border flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-              isFavorite ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'
+              'absolute top-2.5 right-2.5 z-30 min-w-11 min-h-11 w-11 h-11 rounded-full bg-transparent flex items-center justify-center transition-colors cursor-pointer drop-shadow-[0_1px_4px_rgba(255,255,255,0.85)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              isFavorite ? 'text-destructive' : 'text-foreground/75 hover:text-foreground'
             )}
           >
             <Heart className={cn('w-4 h-4', isFavorite && 'fill-current')} aria-hidden="true" />
