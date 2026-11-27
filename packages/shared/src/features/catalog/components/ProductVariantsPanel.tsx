@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Layers, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button, Input, Label } from '../../../components/ui';
 import { ApiClientError } from '../../../lib/api/client';
 import {
@@ -107,6 +108,8 @@ export function ProductVariantsPanel({
   const handleSave = async () => {
     if (!canManage) return;
     setError(null);
+    const normalizedCarat = form.centerStoneCarat.toString().replace(',', '.').trim() || '0';
+    const normalizedWeight = form.grossWeightGram.toString().replace(',', '.').trim() || '0.01';
     try {
       if (editingId) {
         await patchMutation.mutateAsync({
@@ -116,11 +119,12 @@ export function ProductVariantsPanel({
             purityCode: form.purityCode,
             metalColor: form.metalColor,
             size: form.size,
-            centerStoneCarat: form.centerStoneCarat,
-            grossWeightGram: form.grossWeightGram,
+            centerStoneCarat: normalizedCarat,
+            grossWeightGram: normalizedWeight,
             isDefault: form.isDefault,
           },
         });
+        toast.success('Varyant güncellendi.');
       } else {
         await createMutation.mutateAsync({
           parentSku,
@@ -128,12 +132,13 @@ export function ProductVariantsPanel({
           purityCode: form.purityCode,
           metalColor: form.metalColor,
           size: form.size,
-          centerStoneCarat: form.centerStoneCarat,
-          grossWeightGram: form.grossWeightGram,
+          centerStoneCarat: normalizedCarat,
+          grossWeightGram: normalizedWeight,
           initialStockQty: 0,
           isDefault: form.isDefault,
           isActive: true,
         });
+        toast.success('Yeni varyant oluşturuldu.');
       }
       setShowForm(false);
       setEditingId(null);
@@ -145,6 +150,7 @@ export function ProductVariantsPanel({
             ? err.message
             : 'Varyant kaydedilemedi.';
       setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -347,12 +353,12 @@ export function ProductVariantsPanel({
                 <Label className="text-[11px]">Yüzük ölçüsü</Label>
                 <Input
                   type="number"
-                  min={6}
+                  min={0}
                   max={70}
                   className="font-mono text-right"
                   value={form.size}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, size: Math.max(6, Math.round(Number(e.target.value) || 14)) }))
+                    setForm((f) => ({ ...f, size: Math.max(0, Math.round(Number(e.target.value) || 0)) }))
                   }
                 />
               </div>
@@ -391,6 +397,11 @@ export function ProductVariantsPanel({
             />
             <span className="text-xs font-medium">Varsayılan varyant</span>
           </Label>
+          {error && (
+            <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-800 text-xs font-medium">
+              {error}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <Button
               type="button"
