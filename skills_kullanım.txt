@@ -1,0 +1,35 @@
+Ekstra kurulum yok — zaten projede. Senin yapman gereken şey: UI işi verirken skill’i açıkça çağırmak.
+
+1. Design rule (otomatik)
+.cursor/rules/design-ui-system.mdc frontend dosyalarında (tsx, css vb.) açıldığında/çalışırken agent’a gelir.
+Sen sadece UI işi yap; o zaten “mor gradient / glass / AI ikon yok” kurallarını uygular.
+
+2. ui-ux-pro-max (sen tetiklersin)
+Chat’te skill adını yaz veya UI işini net tarif et. Agent skill’i okuyup search script’ini çalıştırır.
+
+Örnek promptlar:
+
+
+@ui-ux-pro-max ile login sayfası tasarla. Anti-AI aesthetic kurallarına uy.
+
+ui-ux-pro-max kullanarak dashboard için design system çıkar ve uygula.
+
+Bu component'i ui-ux-pro-max ile a11y + tipografi açısından review et.
+
+Landing page yap: fintech SaaS, editorial look. ui-ux-pro-max design-system kullan.
+Ne zaman ne söyle
+İstediğin	Söylemen gereken
+Yeni sayfa / görünüm
+“ui-ux-pro-max ile tasarla + design rule’a uy”
+Renk / font / stil sistemi
+“design system çıkar”
+Mevcut UI düzelt
+“bu ekranı ui-ux-pro-max ile review et / düzelt”
+Sadece backend
+Skill gerekmez
+Pratik akış
+Hangi ekranı istediğini söyle (ürün tipi + ton).
+Prompt’a ui-ux-pro-max ekle.
+Agent öneriyi çıkarır; beğenirsen “uygula” de.
+Frontend dosyalarında design rule zaten filtreler.
+İstersen şimdi birlikte bir ekran için (ör. login / dashboard / landing) ilk design system’i çıkarıp uygulamaya başlayabiliriz.

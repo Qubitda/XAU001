@@ -115,7 +115,7 @@ export function FeaturedAndNewSection({
                   className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-medium text-foreground border-b border-foreground/70 pb-0.5 hover:text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors"
                 >
                   <span>Koleksiyonu İncele</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </Link>
               </div>
             </div>
@@ -136,7 +136,7 @@ export function FeaturedAndNewSection({
                   className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-medium text-foreground border-b border-foreground/70 pb-0.5 hover:text-foreground hover:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors"
                 >
                   <span>Tümünü Gör</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
                 </Link>
               </div>
             </div>
@@ -157,7 +157,7 @@ export function FeaturedAndNewSection({
                           key={product.parentSku}
                           type="button"
                           onClick={() => onOpenProduct(product.parentSku)}
-                          title={`${product.title} — ${formatTrNumber(metrics.discountedB2cPriceTry, 0)} TL`}
+                          aria-label={`${product.title} — ${formatTrNumber(metrics.discountedB2cPriceTry, 0)} TL`}
                           className="group relative aspect-square rounded-[4px] overflow-hidden bg-card border border-border hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
                         >
                           {imgFailed ? (
@@ -174,7 +174,7 @@ export function FeaturedAndNewSection({
                           ) : (
                             <img
                               src={media.mainUrl}
-                              alt={product.title}
+                              alt=""
                               loading="lazy"
                               decoding="async"
                               referrerPolicy="no-referrer"
@@ -197,9 +197,9 @@ export function FeaturedAndNewSection({
                       type="button"
                       onClick={handleNextNewPreview}
                       aria-label="Sonraki yeni tasarımları göster"
-                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white border border-border text-foreground hover:border-ring hover:text-foreground flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
+                      className="min-w-11 min-h-11 w-11 h-11 rounded-full bg-white border border-border text-foreground hover:border-ring hover:text-foreground flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
                     >
-                      <ChevronRight className="w-4 h-4" />
+                      <ChevronRight className="w-4 h-4" aria-hidden="true" />
                     </button>
                   )}
                 </>
@@ -216,7 +216,7 @@ export function FeaturedAndNewSection({
       >
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-4">
           <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground font-medium">
+            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground font-medium">
               Sertifikalı Koleksiyon
             </p>
             <h2 className="font-serif text-2xl sm:text-3xl font-normal text-foreground">
@@ -225,7 +225,7 @@ export function FeaturedAndNewSection({
           </div>
 
           <div
-            role="tablist"
+            role="group"
             aria-label="Ürün filtreleri"
             className="flex items-center gap-5 sm:gap-7 overflow-x-auto no-scrollbar"
           >
@@ -241,8 +241,7 @@ export function FeaturedAndNewSection({
                 <button
                   key={tab.id}
                   type="button"
-                  role="tab"
-                  aria-selected={active}
+                  aria-pressed={active}
                   onClick={() => setActiveTab(tab.id)}
                   className={`relative pb-2 text-xs sm:text-[13px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
                     active
@@ -252,7 +251,7 @@ export function FeaturedAndNewSection({
                 >
                   {tab.label}
                   {tab.count > 0 && (
-                    <span className="ml-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+                    <span className="ml-1.5 font-mono text-xs text-muted-foreground tabular-nums">
                       {tab.count}
                     </span>
                   )}
@@ -294,10 +293,10 @@ export function FeaturedAndNewSection({
             <div className="pt-1">
               <Link
                 to="/koleksiyon"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[4px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[4px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
               >
                 <span>Koleksiyonu Görüntüle</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
               </Link>
             </div>
           </div>
@@ -340,7 +339,7 @@ export function FeaturedAndNewSection({
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-[4px] border border-border bg-card text-xs font-medium text-foreground hover:border-ring hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
             >
               <span>Tüm Koleksiyonu Keşfet ({items.length} tasarım)</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
             </Link>
           </div>
         )}

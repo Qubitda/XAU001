@@ -71,8 +71,17 @@ export function B2cHomePage() {
     );
   };
 
+  const addedProductTitle = useMemo(() => {
+    if (!addedSku) return null;
+    return products.find((p) => p.parentSku === addedSku)?.title ?? null;
+  }, [addedSku, products]);
+
   return (
     <div className="bg-background text-foreground">
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {addedProductTitle ? `${addedProductTitle} sepete eklendi` : ''}
+      </div>
+
       {/* 1. Hero Campaign Slider */}
       <HeroBannerSlider />
 

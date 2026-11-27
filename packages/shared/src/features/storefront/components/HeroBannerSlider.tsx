@@ -106,9 +106,16 @@ export function HeroBannerSlider({
 
   return (
     <section
+      aria-roledescription="carousel"
       aria-label="Öne çıkan kampanya"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
+      onFocusCapture={() => setIsPaused(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setIsPaused(false);
+        }
+      }}
       className="relative w-full overflow-hidden bg-muted border-b border-border"
     >
       <div className="relative min-h-[470px] sm:min-h-[500px] lg:min-h-[560px] xl:min-h-[600px] flex items-center">
@@ -134,14 +141,14 @@ export function HeroBannerSlider({
         <div className="relative z-10 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-12 sm:py-16 lg:py-20">
           <div className="max-w-md lg:max-w-lg space-y-5 sm:space-y-6">
             {/* Eyebrow with Champagne Gold Hairline Rules */}
-            <div className="inline-flex items-center gap-3 text-[11px] sm:text-xs tracking-[0.26em] text-muted-foreground font-medium">
+            <div className="inline-flex items-center gap-3 text-xs tracking-[0.26em] text-muted-foreground font-medium">
               <span className="w-6 sm:w-8 h-px bg-primary" aria-hidden="true" />
               <span>{activeSlide.eyebrow}</span>
               <span className="w-6 sm:w-8 h-px bg-primary" aria-hidden="true" />
             </div>
 
             {/* Editorial Serif Headline */}
-            <h1 className="font-serif text-[40px] min-[375px]:text-[44px] sm:text-5xl lg:text-[62px] font-normal text-foreground leading-[1.04] tracking-[-0.01em]">
+            <h1 className="font-serif text-[40px] min-[375px]:text-[44px] sm:text-5xl lg:text-[62px] font-normal text-foreground leading-[1.08] tracking-[-0.01em] text-balance">
               <span className="block">{activeSlide.titleLines[0]}</span>
               <span className="block">{activeSlide.titleLines[1]}</span>
             </h1>
@@ -158,7 +165,7 @@ export function HeroBannerSlider({
                 className="inline-flex items-center justify-center gap-3 min-h-[46px] px-6 sm:px-7 py-3 rounded-[4px] bg-primary text-primary-foreground text-xs sm:text-[13px] font-medium tracking-[0.04em] hover:bg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background transition-colors whitespace-nowrap"
               >
                 <span>{activeSlide.ctaLabel}</span>
-                <ArrowRight className="w-4 h-4 shrink-0" />
+                <ArrowRight className="w-4 h-4 shrink-0" aria-hidden="true" />
               </Link>
             </div>
 
@@ -169,11 +176,14 @@ export function HeroBannerSlider({
                   type="button"
                   onClick={handlePrev}
                   aria-label="Önceki kampanya"
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-primary/8 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center min-w-11 min-h-11 w-11 h-11 rounded-full hover:bg-primary/8 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                 </button>
-                <span className="font-mono text-xs tabular-nums tracking-wider select-none">
+                <span
+                  className="font-mono text-xs tabular-nums tracking-wider select-none"
+                  aria-live="polite"
+                >
                   <strong className="font-semibold text-foreground">{activeIndex + 1}</strong>
                   <span className="mx-1 text-muted-foreground">/</span>
                   <span>{safeSlides.length}</span>
@@ -182,9 +192,9 @@ export function HeroBannerSlider({
                   type="button"
                   onClick={handleNext}
                   aria-label="Sonraki kampanya"
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-full hover:bg-primary/8 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center min-w-11 min-h-11 w-11 h-11 rounded-full hover:bg-primary/8 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors cursor-pointer"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             )}

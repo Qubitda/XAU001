@@ -267,6 +267,22 @@ export function StorefrontLayout() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    const previous = root.style.scrollPaddingTop;
+    root.style.scrollPaddingTop = '4.5rem';
+    const mq = window.matchMedia('(min-width: 768px)');
+    const apply = () => {
+      root.style.scrollPaddingTop = mq.matches ? '74px' : '4.5rem';
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => {
+      mq.removeEventListener('change', apply);
+      root.style.scrollPaddingTop = previous;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!mobileMenuOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setMobileMenuOpen(false);

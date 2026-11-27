@@ -209,8 +209,8 @@ export function StorefrontProductCard({
       : 0;
 
   const mediaFrameClass = isCollectionLayout
-    ? 'relative h-[220px] sm:h-[260px] xl:h-[280px] bg-muted rounded-sm overflow-hidden cursor-pointer'
-    : 'relative aspect-[4/3] bg-muted overflow-hidden cursor-pointer';
+    ? 'relative h-[220px] sm:h-[260px] xl:h-[280px] bg-muted rounded-sm overflow-hidden'
+    : 'relative aspect-[4/3] bg-muted overflow-hidden';
 
   const articleClass = isCollectionLayout
     ? 'group flex h-full flex-col gap-3'
@@ -243,6 +243,7 @@ export function StorefrontProductCard({
               key={color}
               type="button"
               aria-label={`${product.title} — ${color} Altın önizle`}
+              aria-pressed={isCurrent}
               onClick={(e) => {
                 e.stopPropagation();
                 setImgFailed(false);
@@ -250,7 +251,7 @@ export function StorefrontProductCard({
                 onSelectColor(color);
               }}
               className={cn(
-                'w-3.5 h-3.5 rounded-full border transition-transform cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'inline-flex items-center justify-center min-w-6 min-h-6 w-6 h-6 rounded-full border transition-transform cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 dotBg,
                 isCurrent
                   ? 'border-foreground scale-110 ring-2 ring-ring/40'
@@ -260,73 +261,46 @@ export function StorefrontProductCard({
           );
         })}
         {!isCollectionLayout ? (
-          <span className="text-[11px] text-muted-foreground ml-0.5">{displayColor}</span>
+          <span className="text-xs text-muted-foreground ml-0.5">{displayColor}</span>
         ) : null}
       </div>
     ) : null;
 
-  const mediaStage = (
+  const mediaImages = !imgFailed && resolvedMedia.mainUrl ? (
     <>
-      <LuxuryMerchRibbon
-        discountPct={activeDiscountPct}
-        isNewCollection={false}
-        size="card"
+      <img
+        src={resolvedMedia.mainUrl}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setImgFailed(true)}
+        style={resolvedMedia.toneFilter ? { filter: resolvedMedia.toneFilter } : undefined}
+        className={cn(
+          'w-full h-full object-cover transition-all duration-500 ease-out',
+          !hoverFailed && 'group-hover:opacity-0 group-hover:scale-105'
+        )}
       />
-
-      {onToggleFavorite ? (
-        <button
-          type="button"
-          aria-label={isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite();
-          }}
-          className={cn(
-            'absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-card/95 border border-border flex items-center justify-center transition-colors cursor-pointer',
-            isFavorite ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <Heart className={cn('w-4 h-4', isFavorite && 'fill-current')} />
-        </button>
+      {!hoverFailed && resolvedMedia.hoverUrl ? (
+        <img
+          src={resolvedMedia.hoverUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+          onError={() => setHoverFailed(true)}
+          style={resolvedMedia.toneFilter ? { filter: resolvedMedia.toneFilter } : undefined}
+          className="absolute inset-0 w-full h-full object-cover opacity-0 scale-105 group-hover:opacity-100 group-hover:scale-100 transition-all duration-500 ease-out"
+        />
       ) : null}
-
-      {!imgFailed && resolvedMedia.mainUrl ? (
-        <>
-          <img
-            src={resolvedMedia.mainUrl}
-            alt={`${product.title} — ${displayColor} Altın`}
-            referrerPolicy="no-referrer"
-            onError={() => setImgFailed(true)}
-            style={resolvedMedia.toneFilter ? { filter: resolvedMedia.toneFilter } : undefined}
-            className={cn(
-              'w-full h-full object-cover transition-all duration-500 ease-out',
-              !hoverFailed && 'group-hover:opacity-0 group-hover:scale-105'
-            )}
-          />
-          {!hoverFailed && resolvedMedia.hoverUrl ? (
-            <img
-              src={resolvedMedia.hoverUrl}
-              alt={`${product.title} — ${resolvedMedia.hoverLabel}`}
-              referrerPolicy="no-referrer"
-              onError={() => setHoverFailed(true)}
-              style={resolvedMedia.toneFilter ? { filter: resolvedMedia.toneFilter } : undefined}
-              className="absolute inset-0 w-full h-full object-cover opacity-0 scale-105 group-hover:opacity-100 group-hover:scale-100 transition-all duration-500 ease-out"
-            />
-          ) : null}
-        </>
-      ) : (
-        <div className="w-full h-full flex items-center justify-center p-6">
-          <JewelryIllustration
-            visualType={product.visualType}
-            metalColor={displayColor}
-            stoneType={product.stoneType}
-            centerStoneCarat={product.centerStoneCarat}
-            sideStoneCarat={product.sideStoneCarat}
-            className="w-full max-w-[200px] h-auto"
-          />
-        </div>
-      )}
     </>
+  ) : (
+    <div className="w-full h-full flex items-center justify-center p-6" aria-hidden="true">
+      <JewelryIllustration
+        visualType={product.visualType}
+        metalColor={displayColor}
+        stoneType={product.stoneType}
+        centerStoneCarat={product.centerStoneCarat}
+        sideStoneCarat={product.sideStoneCarat}
+        className="w-full max-w-[200px] h-auto"
+      />
+    </div>
   );
 
   const quickAddButton =
@@ -352,7 +326,7 @@ export function StorefrontProductCard({
           <span>Sepete Ekle</span>
         ) : (
           <>
-            <ShoppingBag className="w-3.5 h-3.5" />
+            <ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Sepete Ekle</span>
           </>
         )}
@@ -361,8 +335,38 @@ export function StorefrontProductCard({
 
   return (
     <article className={articleClass}>
-      <div onClick={onOpen} className={mediaFrameClass}>
-        {mediaStage}
+      <div className={mediaFrameClass}>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`${product.title} — ${displayColor} Altın ürün detayını aç`}
+          className="absolute inset-0 z-10 block w-full h-full p-0 m-0 border-0 bg-transparent cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
+          <LuxuryMerchRibbon
+            discountPct={activeDiscountPct}
+            isNewCollection={false}
+            size="card"
+          />
+          {mediaImages}
+        </button>
+
+        {onToggleFavorite ? (
+          <button
+            type="button"
+            aria-label={isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle'}
+            aria-pressed={isFavorite}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+            className={cn(
+              'absolute top-3 right-3 z-30 min-w-11 min-h-11 w-11 h-11 rounded-full bg-card/95 border border-border flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+              isFavorite ? 'text-destructive' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Heart className={cn('w-4 h-4', isFavorite && 'fill-current')} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -372,7 +376,7 @@ export function StorefrontProductCard({
         )}
       >
         {!isCollectionLayout ? (
-          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
             <span className="truncate">
               {product.subCategory || product.category}
               {product.certificateAgency ? ` · ${product.certificateAgency}` : ''}
@@ -386,7 +390,7 @@ export function StorefrontProductCard({
         <button
           type="button"
           onClick={onOpen}
-          className="min-h-[2.75rem] text-left text-lg font-medium leading-snug text-foreground line-clamp-2 transition-colors hover:text-primary cursor-pointer"
+          className="min-h-[2.75rem] text-left text-lg font-medium leading-snug text-foreground line-clamp-2 transition-colors hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           {product.title}
         </button>
@@ -425,7 +429,7 @@ export function StorefrontProductCard({
               <>
                 <div
                   className={cn(
-                    'font-mono text-[11px] text-muted-foreground line-through',
+                    'font-mono text-xs text-muted-foreground line-through',
                     !hasDiscount && 'invisible'
                   )}
                 >
@@ -457,7 +461,7 @@ export function StorefrontProductCard({
                   <>
                     <div
                       className={cn(
-                        'font-mono text-[11px] text-muted-foreground line-through',
+                        'font-mono text-xs text-muted-foreground line-through',
                         !hasDiscount && 'invisible'
                       )}
                     >

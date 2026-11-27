@@ -1,0 +1,26 @@
+---
+description: Anti-AI aesthetic design & UI system rules for frontend work
+globs: "**/*.{tsx,jsx,css,scss,vue,svelte,html}"
+alwaysApply: false
+---
+
+# DESIGN & UI SYSTEM RULES (ANTI-AI AESTHETIC)
+
+## 1. Strict Visual Prohibitions (NEVER USE)
+- NEVER use purple, violet, indigo, or cyan gradients (`bg-gradient-to-r from-indigo-500...`).
+- NEVER use dark mode (`bg-slate-950`, `bg-gray-900`) as the default theme unless explicitly requested. Default to warm off-whites (`#FAF9F6`, `#F8FAFC`) or crisp white (`#FFFFFF`).
+- NEVER use glassmorphism (`backdrop-blur`), neon glow effects, or heavy drop shadows (`shadow-xl`, `shadow-2xl`).
+- NEVER use generic AI icons (sparkles, brains, robots, glowing nodes) from Lucide/Heroicons.
+- NEVER use centered hero sections with a glowing badge on top (`rounded-full bg-indigo-50 text-indigo-600`).
+
+## 2. Editorial & Human-Centric Styling (ALWAYS USE)
+- **Borders & Depth:** Use crisp `1px` borders (`border-neutral-200` or `border-stone-200`) instead of shadows to separate surfaces. Keep border-radius subtle (`rounded-md` or `rounded-lg`, avoid `rounded-3xl`).
+- **Color Restraint:** Stick to a 90/10 color rule. 90% neutral backgrounds/text (`stone` or `neutral` Tailwind palettes instead of cool `gray`/`slate`), 10% single authoritative accent color (e.g., deep forest green, navy, or burnt terracotta).
+- **Typography:** Pair a distinctive Serif font for main headings (`h1`, `h2` with tight tracking `tracking-tight`) with a clean, neutral Sans-serif (`Inter` or `Plus Jakarta Sans`) for body text. Keep body line-height generous (`leading-relaxed`).
+- **Layout:** Prefer asymmetric layouts, left-aligned hero sections, and structured Bento grids with clean divider lines over floating cards.
+
+## 3. Next.js & Tailwind Best Practices
+- Use `next/font/google` for zero-layout-shift font loading.
+- Always use `next/image` with proper aspect ratios; prefer real, high-contrast editorial photography or clean, stripped-down UI wireframes over 3D renders.
+- Use Tailwind CSS variables (`@theme` in v4 or `tailwind.config.ts`) for semantic color naming (`bg-surface`, `text-primary`, `border-subtle`) instead of hardcoded Tailwind palette classes.
+- Ensure semantic HTML (`<main>`, `<article>`, `<nav>`, `<section>`) and strict WCAG AA contrast ratios for all text elements.

@@ -119,9 +119,12 @@ export function CategoryStrip({ products }: CategoryStripProps) {
 
   return (
     <section
-      aria-label="Mücevher kategorileri"
+      aria-labelledby="storefront-categories-heading"
       className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
     >
+      <h2 id="storefront-categories-heading" className="sr-only">
+        Mücevher kategorileri
+      </h2>
       <div className={`grid ${colClass} gap-3 sm:gap-5`}>
         {cards.map((cat) => (
           <Link
@@ -143,12 +146,15 @@ export function CategoryStrip({ products }: CategoryStripProps) {
             />
             <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 flex items-end justify-between gap-2 text-primary-foreground">
               <div className="min-w-0">
-                <h2 className="font-serif text-lg sm:text-xl font-medium leading-tight tracking-[0.01em] inline-flex items-center gap-1.5">
+                <p className="font-serif text-lg sm:text-xl font-medium leading-tight tracking-[0.01em] inline-flex items-center gap-1.5">
                   <span>{cat.label}</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-1 shrink-0" />
-                </h2>
+                  <ArrowRight
+                    className="w-3.5 h-3.5 text-primary-foreground/90 transition-transform duration-200 group-hover:translate-x-1 shrink-0"
+                    aria-hidden="true"
+                  />
+                </p>
                 {cat.count > 0 && (
-                  <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                  <div className="text-xs text-primary-foreground/85 mt-0.5 tabular-nums">
                     {cat.count} tasarım
                   </div>
                 )}
