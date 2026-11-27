@@ -310,7 +310,7 @@ export function OpsLayout() {
       </Sheet>
 
       <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
-        <header className="sticky top-0 z-20 h-16 bg-card/95 backdrop-blur border-b border-border px-4 sm:px-6 flex items-center justify-between gap-4">
+        <header className="sticky top-0 z-20 h-16 bg-card border-b border-border px-4 sm:px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Button
               type="button"
@@ -335,11 +335,11 @@ export function OpsLayout() {
             </Breadcrumb>
           </div>
 
-          <div className="flex items-center gap-4 shrink-0 text-caption">
-            <ThemeToggle compact />
+          <div className="flex items-center gap-3 shrink-0 text-caption">
+            <ThemeToggle compact className="border border-border bg-background hover:bg-muted" />
             <Link
               to="/ops/fiyat-motoru"
-              className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-md border border-border bg-muted font-sku tabular-nums hover:border-ring transition-colors"
+              className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-md border border-border bg-muted font-sku tabular-nums whitespace-nowrap shrink-0 hover:border-ring transition-colors"
             >
               <span>
                 HAS <strong className="text-foreground">{formatTrNumber(rates.liveHasGoldTrySell, 2)}</strong> TL
@@ -354,7 +354,10 @@ export function OpsLayout() {
               </span>
             </Link>
             {isB2cStorefrontEnabled() ? (
-              <a href={STOREFRONT_URL} className="hover:text-foreground font-medium transition-colors">
+              <a
+                href={STOREFRONT_URL}
+                className="whitespace-nowrap shrink-0 hover:text-foreground font-medium transition-colors"
+              >
                 Vitrini Gör
               </a>
             ) : null}

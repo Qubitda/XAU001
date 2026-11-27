@@ -62,8 +62,7 @@ export function createEmptyRates(): LiveRates {
 
 /** Blank product draft for create forms — no sample jewelry content. */
 export function createBlankProduct(overrides: Partial<ProductState> = {}): ProductState {
-  const parentSku =
-    overrides.parentSku ?? `KY${Math.floor(100 + Math.random() * 899)}`;
+  const parentSku = overrides.parentSku ?? '';
   return {
     catalogStatus: 'DRAFT',
     visualType: 'solitaire_ring',
@@ -72,7 +71,7 @@ export function createBlankProduct(overrides: Partial<ProductState> = {}): Produ
     productType: '',
     productKind: 'FINISHED',
     parentSku,
-    barcode: overrides.barcode ?? `P${Math.floor(700000 + Math.random() * 299999)}`,
+    barcode: overrides.barcode ?? '',
     title: '',
     createdBy: '',
     description: '',
