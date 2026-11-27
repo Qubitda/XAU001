@@ -10,7 +10,7 @@ export function HeroBannerSlider() {
       className="relative w-full overflow-hidden bg-muted border-b border-border"
     >
       <div className="relative min-h-[500px] sm:min-h-[560px] lg:min-h-[640px] xl:min-h-[680px] flex items-center">
-        {/* Background Campaign Video (no overlay) */}
+        {/* Background Campaign Video */}
         <video
           src={heroCampaignVideo}
           autoPlay
@@ -22,18 +22,17 @@ export function HeroBannerSlider() {
           className="absolute inset-0 w-full h-full object-cover object-[72%_22%] sm:object-[68%_24%] lg:object-[62%_25%]"
         />
 
+        {/* Localized Left-Edge Scrim — keeps right/center video 100% clear */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/75 via-white/25 via-35% to-transparent to-55% sm:bg-gradient-to-r sm:from-white/80 sm:via-white/35 sm:via-22% sm:to-transparent sm:to-42%"
+        />
+
         {/* Hero Copy Overlay */}
         <div className="relative z-10 max-w-[1440px] mx-auto w-full px-4 sm:px-6 lg:px-12 pt-28 pb-12 sm:pt-32 sm:pb-16 lg:pt-36 lg:pb-20">
           <div className="max-w-sm lg:max-w-[440px]">
-            {/* Eyebrow */}
-            <div className="inline-flex items-center gap-3 text-[11px] tracking-[0.26em] text-stone-700 font-medium">
-              <span className="w-6 sm:w-8 h-px bg-[#A58C72]" aria-hidden="true" />
-              <span>TARA DIAMOND</span>
-              <span className="w-6 sm:w-8 h-px bg-[#A58C72]" aria-hidden="true" />
-            </div>
-
             {/* Editorial Serif Headline (58-62px on desktop) */}
-            <h1 className="mt-4 font-serif text-[44px] sm:text-[54px] lg:text-[62px] font-normal text-[#171717] leading-[1.04] tracking-[-0.015em] text-balance">
+            <h1 className="font-serif text-[44px] sm:text-[54px] lg:text-[62px] font-normal text-[#171717] leading-[1.04] tracking-[-0.015em] text-balance">
               <span className="block">Zamansız</span>
               <span className="block">Bir Zarafet</span>
             </h1>

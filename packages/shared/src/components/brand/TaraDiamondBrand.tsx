@@ -35,6 +35,7 @@ interface TaraDiamondLogoProps {
   variant?: 'horizontal' | 'stacked';
   tone?: 'dark' | 'light';
   size?: 'sm' | 'md' | 'lg';
+  highContrast?: boolean;
   className?: string;
 }
 
@@ -42,30 +43,42 @@ export function TaraDiamondLogo({
   variant = 'horizontal',
   tone = 'dark',
   size = 'md',
+  highContrast = false,
   className = '',
 }: TaraDiamondLogoProps) {
-  const titleColor = tone === 'light' ? 'text-primary-foreground' : 'text-foreground';
-  const subColor = tone === 'light' ? 'text-primary-foreground/70' : 'text-muted-foreground';
+  const titleColor =
+    tone === 'light'
+      ? 'text-primary-foreground'
+      : highContrast
+        ? 'text-[#111111]'
+        : 'text-foreground';
+  const subColor =
+    tone === 'light'
+      ? 'text-primary-foreground/70'
+      : highContrast
+        ? 'text-[#171717]/90 font-medium'
+        : 'text-muted-foreground';
   const lineColor = tone === 'light' ? 'bg-primary-foreground/40' : 'bg-border';
+  const contrastShadow = highContrast ? 'drop-shadow-[0_1px_10px_rgba(255,255,255,0.75)]' : '';
 
   const starSize =
-    size === 'sm' ? 'w-6 h-6' : size === 'lg' ? 'w-9 h-9' : 'w-7 h-7 sm:w-8 sm:h-8';
+    size === 'sm' ? 'w-6 h-6' : size === 'lg' ? 'w-10 h-10 lg:w-11 lg:h-11' : 'w-7 h-7 sm:w-8 sm:h-8';
   const taraTextSize =
     size === 'sm'
       ? 'text-[17px] tracking-[0.22em]'
       : size === 'lg'
-        ? 'text-[26px] tracking-[0.24em]'
+        ? 'text-[27px] lg:text-[30px] tracking-[0.26em]'
         : 'text-[19px] sm:text-[22px] tracking-[0.24em]';
   const diamondTextSize =
     size === 'sm'
       ? 'text-[7.5px] tracking-[0.36em]'
       : size === 'lg'
-        ? 'text-[10px] tracking-[0.42em]'
+        ? 'text-[10px] lg:text-[11px] tracking-[0.44em]'
         : 'text-[8.5px] sm:text-[9px] tracking-[0.38em]';
 
   if (variant === 'stacked') {
     return (
-      <div className={`inline-flex flex-col items-center select-none ${className}`}>
+      <div className={`inline-flex flex-col items-center select-none ${contrastShadow} ${className}`}>
         <TaraStarMark className={starSize} />
         <span className={`font-serif font-medium leading-none mt-1.5 ${taraTextSize} ${titleColor}`}>
           TARA
@@ -82,14 +95,22 @@ export function TaraDiamondLogo({
   }
 
   return (
-    <div className={`inline-flex items-center gap-2 sm:gap-2.5 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-2.5 sm:gap-3 select-none ${contrastShadow} ${className}`}>
       <TaraStarMark className={`${starSize} shrink-0`} />
       <div className="flex flex-col items-center leading-none">
         <span className={`font-serif font-medium leading-none ${taraTextSize} ${titleColor}`}>
           TARA
         </span>
-        <span className={`font-sans uppercase leading-none mt-1 ${diamondTextSize} ${subColor}`}>
-          DIAMOND
+        <span className="inline-flex items-center gap-1.5 mt-1.5">
+          {size === 'lg' && (
+            <span className="w-2.5 h-px bg-[#A58C72]" aria-hidden="true" />
+          )}
+          <span className={`font-sans uppercase leading-none ${diamondTextSize} ${subColor}`}>
+            DIAMOND
+          </span>
+          {size === 'lg' && (
+            <span className="w-2.5 h-px bg-[#A58C72]" aria-hidden="true" />
+          )}
         </span>
       </div>
     </div>

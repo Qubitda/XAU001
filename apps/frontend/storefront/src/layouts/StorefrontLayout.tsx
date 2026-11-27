@@ -35,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@taragold/shared/components/ui/dropdown-menu';
-import { TaraDiamondLogo, TaraStarMark } from '@taragold/shared/components/brand/TaraDiamondBrand';
+import { TaraDiamondLogo } from '@taragold/shared/components/brand/TaraDiamondBrand';
 import { useAuth } from '@taragold/shared/providers/AuthProvider';
 import {
   useB2cCartQuery,
@@ -360,12 +360,7 @@ export function StorefrontLayout() {
               : 'bg-background border-b border-border/90 text-muted-foreground'
           }`}
         >
-          <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 h-9 flex items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-1.5 min-w-0 truncate">
-              <TaraStarMark className="w-3 h-3 shrink-0" />
-              <span className="truncate">Ücretsiz Sigortalı Kargo · Güvenli Alışveriş</span>
-            </div>
-
+          <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 h-9 flex items-center justify-end gap-3">
             <div className="hidden md:flex items-center gap-3 shrink-0">
               {showB2bPortal ? (
                 <>
@@ -421,7 +416,7 @@ export function StorefrontLayout() {
               aria-label="TARA DIAMOND Ana Sayfa"
               className="justify-self-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
             >
-              <TaraDiamondLogo size="sm" />
+              <TaraDiamondLogo size="md" highContrast={isTransparentHeader} />
             </Link>
 
             <div className="justify-self-end flex items-center gap-1">
@@ -472,7 +467,7 @@ export function StorefrontLayout() {
                 aria-label="TARA DIAMOND Ana Sayfa"
                 className="inline-flex items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm"
               >
-                <TaraDiamondLogo size="md" />
+                <TaraDiamondLogo size="lg" highContrast={isTransparentHeader} />
               </Link>
             </div>
 
