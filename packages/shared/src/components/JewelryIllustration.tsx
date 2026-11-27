@@ -1,5 +1,6 @@
 import { JewelryVisualType, MetalColor, StoneType } from '../types/jewelry';
 import { formatTrNumber } from '../utils/pricingEngine';
+import { canonicalizeMetalColor } from '../data/productMedia';
 
 interface JewelryIllustrationProps {
   visualType: JewelryVisualType;
@@ -76,9 +77,10 @@ export function JewelryIllustration({
   title = 'Mücevher görseli',
   className = 'w-full max-w-[320px] h-auto select-none',
 }: JewelryIllustrationProps) {
-  const palette = METAL_PALETTES[metalColor];
+  const canonicalColor = canonicalizeMetalColor(metalColor);
+  const palette = METAL_PALETTES[canonicalColor] ?? METAL_PALETTES.Beyaz;
   const gem = getGemColors(stoneType);
-  const uid = `${visualType}-${metalColor}`.replace(/\s+/g, '');
+  const uid = `${visualType}-${canonicalColor}`.replace(/\s+/g, '');
 
   const tiltRad = ((angle - 18) * Math.PI) / 180;
   const shiftX = Math.sin(tiltRad) * 14;

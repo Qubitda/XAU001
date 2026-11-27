@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { AlertCircle, Lock, ShieldAlert } from 'lucide-react';
+import { Lock, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../providers/AuthProvider';
 import type { SessionUserDto } from '../lib/api/openapi';
 import { Button } from './ui';
@@ -263,31 +263,4 @@ export function PortalRouteGuard({ portal, children }: PortalRouteGuardProps) {
   }
 
   return <>{children}</>;
-}
-
-interface BackendPendingNoticeProps {
-  title: string;
-  description: string;
-  endpointHint?: string;
-}
-
-export function BackendPendingNotice({
-  title,
-  description,
-  endpointHint,
-}: BackendPendingNoticeProps) {
-  return (
-    <div className="rounded-md border border-border bg-muted p-4 flex items-start gap-3 text-xs text-foreground">
-      <AlertCircle className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-      <div className="space-y-1 min-w-0">
-        <div className="font-semibold text-foreground">{title}</div>
-        <p className="text-muted-foreground leading-relaxed">{description}</p>
-        {endpointHint && (
-          <p className="font-mono text-[11px] text-muted-foreground pt-0.5 break-all">
-            Beklenen API: {endpointHint}
-          </p>
-        )}
-      </div>
-    </div>
-  );
 }
