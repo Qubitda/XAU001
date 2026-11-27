@@ -222,7 +222,12 @@ export interface LooseStoneDetailState {
   supplierId: string;
 }
 
+export type CatalogStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+
 export interface ProductState {
+  // Yayın Durumu
+  catalogStatus?: CatalogStatus;
+
   // Görsel & Vitrin Model Özeti
   visualType: JewelryVisualType;
   variantCount: number;

@@ -65,6 +65,7 @@ export function createBlankProduct(overrides: Partial<ProductState> = {}): Produ
   const parentSku =
     overrides.parentSku ?? `KY${Math.floor(100 + Math.random() * 899)}`;
   return {
+    catalogStatus: 'DRAFT',
     visualType: 'solitaire_ring',
     variantCount: 0,
     availableColors: [],

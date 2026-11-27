@@ -5,13 +5,17 @@ import {
   ArrowUp,
   ArrowUpRight,
   Calculator,
+  CheckCircle2,
   Diamond,
+  EyeOff,
   Film,
   Globe,
   Image as ImageIcon,
   Layers,
+  Loader2,
   Package,
   Plus,
+  Save,
   Shield,
   Sparkles,
   Trash2,
@@ -57,6 +61,7 @@ import {
 import { getActiveSalesChannels } from '../../../constants/salesChannels';
 import type {
   AdjustmentUnit,
+  CatalogStatus,
   ChannelPricingRule,
   FinishedDetailState,
   FxCurrencyCode,
@@ -787,7 +792,7 @@ export function ProductEntityModal({
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (targetStatus?: CatalogStatus) => {
     setServerError(null);
     const parsed = productFormSchema.safeParse({
       parentSku: draft.parentSku,
@@ -842,9 +847,13 @@ export function ProductEntityModal({
       draft.description.trim() ||
       `${draft.title.trim()} (${draft.purityCode} ${draft.metalColor})`;
 
+    const resolvedStatus: CatalogStatus =
+      targetStatus ?? draft.catalogStatus ?? (mode === 'create' ? 'DRAFT' : 'ACTIVE');
+
     const payload: ProductState = {
       ...draft,
       ...buildDetailPayload(draft, finenessMap),
+      catalogStatus: resolvedStatus,
       parentSku: normalizedSku,
       title: draft.title.trim(),
       description: resolvedDescription,
@@ -907,6 +916,9 @@ export function ProductEntityModal({
   };
   const isMountingKind = resolveProductKind(draft) === 'MOUNTING';
 
+  const currentStatus: CatalogStatus = draft.catalogStatus ?? (mode === 'create' ? 'DRAFT' : 'ACTIVE');
+  const isPublished = currentStatus === 'ACTIVE';
+
   return (
     <EntityModal
       open={open}
@@ -920,8 +932,116 @@ export function ProductEntityModal({
       description="Ürün bilgileri, varyantlar, stok, taş/montür, fiyatlandırma ve satış ayarları. Katalog kartı ile fiziksel stok ayrıdır."
       isDirty={isDirty}
       isSubmitting={isSubmitting}
-      submitLabel={mode === 'create' ? 'Ürünü Oluştur ve Yayınla' : 'Tüm Değişiklikleri Kaydet'}
-      onSubmit={handleSubmit}
+      onSubmit={() => void handleSubmit(currentStatus)}
+      footer={
+        <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Durum:</span>
+            {isPublished ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-[11px]">
+                <CheckCircle2 className="w-3 h-3" />
+                Yayında (Vitrin & B2B Açık)
+              </span>
+            ) : currentStatus === 'ARCHIVED' ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-700 font-medium text-[11px]">
+                Arşivde
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium text-[11px]">
+                Taslak (Henüz Yayında Değil)
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isSubmitting}
+              onClick={() => onOpenChange(false)}
+            >
+              Vazgeç
+            </Button>
+
+            {mode === 'create' ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit('DRAFT')}
+                >
+                  {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Taslak Olarak Kaydet
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit('ACTIVE')}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  Kaydet ve Yayınla
+                </Button>
+              </>
+            ) : isPublished ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit('DRAFT')}
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                  Yayından Kaldır (Taslağa Al)
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit('ACTIVE')}
+                >
+                  {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Değişiklikleri Kaydet
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit('DRAFT')}
+                >
+                  {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Taslak Olarak Kaydet
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isSubmitting}
+                  onClick={() => void handleSubmit('ACTIVE')}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  )}
+                  Kaydet ve Yayınla
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      }
     >
       <div className="space-y-5 text-xs">
         {serverError && (

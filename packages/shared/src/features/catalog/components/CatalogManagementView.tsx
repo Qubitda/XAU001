@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Calculator,
+  CheckCircle2,
   ExternalLink,
+  EyeOff,
   Globe,
   Image as ImageIcon,
   Layers,
@@ -88,6 +90,7 @@ export function CatalogManagementView() {
 
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tümü');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'DRAFT'>('ALL');
   const [createOpen, setCreateOpen] = useState(false);
   const [editingState, setEditingState] = useState<{
     product: ProductState;
@@ -95,11 +98,24 @@ export function CatalogManagementView() {
   } | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductState | null>(null);
 
+  const publishedCount = useMemo(
+    () => products.filter((p) => (p.catalogStatus ?? 'ACTIVE') === 'ACTIVE').length,
+    [products]
+  );
+  const draftCount = useMemo(
+    () => products.filter((p) => p.catalogStatus === 'DRAFT').length,
+    [products]
+  );
+
   const rows = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr-TR');
     const matchOpts = categoryOptions;
     return products
       .filter((p) => {
+        const status = p.catalogStatus ?? 'ACTIVE';
+        if (statusFilter !== 'ALL' && status !== statusFilter) {
+          return false;
+        }
         if (
           categoryFilter !== 'Tümü' &&
           !matchesDefinitionValue(p.category, categoryFilter, matchOpts)
@@ -120,7 +136,7 @@ export function CatalogManagementView() {
         thumbUrl: resolveProductThumbnail(product),
         categoryLabel: resolveDefinitionLabel(product.category, matchOpts) || product.category,
       }));
-  }, [products, rates, query, categoryFilter, categoryOptions]);
+  }, [products, rates, query, categoryFilter, statusFilter, categoryOptions]);
 
   const handleConfirmDelete = async () => {
     if (!deletingProduct) return;
@@ -145,7 +161,7 @@ export function CatalogManagementView() {
       <div className="space-y-6">
         <ListPage
           title="Katalog & Stok Yönetimi"
-          subtitle={`${products.length} aktif mücevher modeli · Fiyatlandırma, görsel/video galerisi ve SEO düzenleme`}
+          subtitle={`${products.length} mücevher modeli (${publishedCount} yayında · ${draftCount} taslak) · Fiyatlandırma, görsel/video galerisi ve SEO düzenleme`}
           actions={
             <>
               <Button size="sm" variant="outline" onClick={() => navigate('/ops/fiyat-motoru')}>
@@ -171,15 +187,34 @@ export function CatalogManagementView() {
                 />
               </div>
 
-              <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
-                <TabsList className="h-9">
-                  {categoryTabs.map((cat) => (
-                    <TabsTrigger key={cat.value} value={cat.value} className="text-xs px-3">
-                      {cat.label}
+              <div className="flex flex-wrap items-center gap-2">
+                <Tabs
+                  value={statusFilter}
+                  onValueChange={(v) => setStatusFilter(v as 'ALL' | 'ACTIVE' | 'DRAFT')}
+                >
+                  <TabsList className="h-9">
+                    <TabsTrigger value="ALL" className="text-xs px-3">
+                      Tümü ({products.length})
                     </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
+                    <TabsTrigger value="ACTIVE" className="text-xs px-3">
+                      Yayında ({publishedCount})
+                    </TabsTrigger>
+                    <TabsTrigger value="DRAFT" className="text-xs px-3">
+                      Taslak ({draftCount})
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+
+                <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <TabsList className="h-9">
+                    {categoryTabs.map((cat) => (
+                      <TabsTrigger key={cat.value} value={cat.value} className="text-xs px-3">
+                        {cat.label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              </div>
             </div>
           }
         >
@@ -188,6 +223,7 @@ export function CatalogManagementView() {
               <TableHeader className="bg-muted/40">
                 <TableRow>
                   <TableHead className="px-4 font-medium">Model</TableHead>
+                  <TableHead className="px-4 font-medium">Durum</TableHead>
                   <TableHead className="px-4 font-medium">Ayar / Taş</TableHead>
                   <TableHead className="px-4 font-medium text-right">Stok Adedi</TableHead>
                   <TableHead className="px-4 font-medium text-right">Has Altın</TableHead>
@@ -197,7 +233,10 @@ export function CatalogManagementView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map(({ product, metrics, thumbUrl, categoryLabel }) => (
+                {rows.map(({ product, metrics, thumbUrl, categoryLabel }) => {
+                  const status = product.catalogStatus ?? 'ACTIVE';
+                  const isPublished = status === 'ACTIVE';
+                  return (
                   <TableRow key={product.parentSku}>
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-3">
@@ -215,6 +254,23 @@ export function CatalogManagementView() {
                           </div>
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap">
+                      {isPublished ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-[11px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          Yayında
+                        </span>
+                      ) : status === 'ARCHIVED' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-700 font-medium text-[11px]">
+                          Arşiv
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-medium text-[11px]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          Taslak
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="px-4 py-3 text-foreground whitespace-nowrap">
                       <div>
@@ -250,6 +306,30 @@ export function CatalogManagementView() {
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className={
+                            isPublished
+                              ? 'h-8 w-8 text-amber-600 hover:text-amber-700'
+                              : 'h-8 w-8 text-emerald-600 hover:text-emerald-700'
+                          }
+                          title={isPublished ? 'Yayından Kaldır (Taslağa Al)' : 'Yayınla'}
+                          disabled={updateProductMutation.isPending}
+                          onClick={() =>
+                            updateProductMutation.mutate({
+                              parentSku: product.parentSku,
+                              patch: { catalogStatus: isPublished ? 'DRAFT' : 'ACTIVE' },
+                            })
+                          }
+                        >
+                          {isPublished ? (
+                            <EyeOff className="w-3.5 h-3.5" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
                         <Button
                           type="button"
                           variant="ghost"
@@ -330,7 +410,8 @@ export function CatalogManagementView() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </PortalDataCard>
