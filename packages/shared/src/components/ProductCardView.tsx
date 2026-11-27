@@ -325,16 +325,14 @@ export function ProductCardView({
           </p>
         </div>
 
-        <div
-          className={`text-xs font-mono self-start md:self-auto shrink-0 ${
-            isB2c ? 'text-muted-foreground' : 'text-muted-foreground'
-          }`}
-        >
-          SKU:{' '}
-          <span className={`font-medium ${isB2c ? 'text-foreground' : 'text-foreground'}`}>
-            {computed.sku}
-          </span>
-        </div>
+        {!isB2c && (
+          <div className="text-xs font-mono self-start md:self-auto shrink-0 text-muted-foreground">
+            SKU:{' '}
+            <span className="font-medium text-foreground">
+              {computed.sku}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Main 2-Column Product Hero Split */}
@@ -523,11 +521,7 @@ export function ProductCardView({
                     · Tahmini teslim: {product.leadTimeDays} İş Günü
                   </p>
                 </div>
-              ) : (
-                <div className="bg-muted border border-border rounded-[4px] p-4 text-xs text-muted-foreground">
-                  Bu ürün için <strong>B2C satış kanalı</strong> tanımlanmadı.
-                </div>
-              ))}
+              ) : null)}
 
             {role === 'b2b' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted border border-border rounded-md p-4">
