@@ -24,6 +24,7 @@ import { OpsApiKeysPage } from './pages/ops/OpsApiKeysPage';
 import { OpsWebhooksPage } from './pages/ops/OpsWebhooksPage';
 import { OpsDefinitionsPage } from './pages/ops/OpsDefinitionsPage';
 import { OpsSettingsPage } from './pages/ops/OpsSettingsPage';
+import { OpsExchangeMatrixPage } from './pages/ops/OpsExchangeMatrixPage';
 import { OpsTransactionsPage } from './pages/ops/OpsTransactionsPage';
 import { OpsMailLogsPage } from './pages/ops/OpsMailLogsPage';
 import { OpsSalesTasksPage } from './pages/ops/OpsSalesTasksPage';
@@ -84,6 +85,7 @@ export function App() {
                   <Route path="api-anahtarlari" element={<OpsApiKeysPage />} />
                   <Route path="webhookler" element={<OpsWebhooksPage />} />
                   <Route path="ayarlar" element={<OpsSettingsPage />} />
+                  <Route path="ayarlar/kur-matrisi" element={<OpsExchangeMatrixPage />} />
                   <Route path="mail-loglari" element={<OpsMailLogsPage />} />
                   <Route path="tanimlar" element={<OpsDefinitionsPage />} />
                   <Route path="urun/:parentSku" element={<ProductCardFeatureView />} />

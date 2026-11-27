@@ -117,6 +117,12 @@ from apps.market.api import (
     OpsRateSnapshotListCreateView,
     OpsRatesUpdateView,
 )
+from apps.market.matrix_api import (
+    OpsExchangeMetalMatrixActiveView,
+    OpsExchangeMetalMatrixDetailView,
+    OpsExchangeMetalMatrixPublishView,
+    OpsExchangeMetalMatrixVersionsView,
+)
 from apps.notifications.api import (
     OpsNotificationDetailView,
     OpsNotificationListCreateView,
@@ -536,6 +542,26 @@ urlpatterns = [
     path("api/v1/ops/pricing/quotes", OpsPriceQuoteListView.as_view(), name="ops-pricing-quotes"),
     path("api/v1/ops/pricing/locks", OpsPriceLockListView.as_view(), name="ops-pricing-locks"),
     path("api/v1/ops/rates", OpsRatesUpdateView.as_view(), name="ops-rates"),
+    path(
+        "api/v1/ops/settings/exchange-metal-matrix",
+        OpsExchangeMetalMatrixActiveView.as_view(),
+        name="ops-settings-exchange-metal-matrix",
+    ),
+    path(
+        "api/v1/ops/settings/exchange-metal-matrix/versions",
+        OpsExchangeMetalMatrixVersionsView.as_view(),
+        name="ops-settings-exchange-metal-matrix-versions",
+    ),
+    path(
+        "api/v1/ops/settings/exchange-metal-matrix/<uuid:matrix_id>",
+        OpsExchangeMetalMatrixDetailView.as_view(),
+        name="ops-settings-exchange-metal-matrix-detail",
+    ),
+    path(
+        "api/v1/ops/settings/exchange-metal-matrix/<uuid:matrix_id>/publish",
+        OpsExchangeMetalMatrixPublishView.as_view(),
+        name="ops-settings-exchange-metal-matrix-publish",
+    ),
     path("api/v1/ops/rates/snapshots", OpsRateSnapshotListCreateView.as_view(), name="ops-rate-snapshots"),
     path(
         "api/v1/ops/rates/snapshots/<str:snapshot_id>",

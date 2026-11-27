@@ -30,6 +30,17 @@ class PricingRecipe(TimestampedModel):
     pricing_mode = models.CharField(max_length=2, choices=PricingMode.choices, default=PricingMode.DETAILED)
     lc_currency = models.CharField(max_length=8, default="TRY")
     last_snapshot = models.ForeignKey(RateSnapshot, on_delete=models.SET_NULL, null=True, blank=True)
+    source_matrix = models.ForeignKey(
+        "market.ExchangeMetalMatrix",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pricing_recipes",
+    )
+    source_matrix_version = models.PositiveIntegerField(null=True, blank=True)
+    applied_rates_snapshot = models.JSONField(default=dict, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+    override_metadata = models.JSONField(default=dict, blank=True)
     cached_total_cost_lc = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
     cached_b2b_try = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     cached_b2c_try = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)

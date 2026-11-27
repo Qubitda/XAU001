@@ -1,6 +1,8 @@
 from decimal import Decimal
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from apps.common.models import TimestampedModel
 
 
@@ -64,3 +66,85 @@ class RateSnapshot(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.snapshot_code} (Has: {self.live_has_gold_try_sell} TL/gr)"
+
+
+class ExchangeMetalMatrix(TimestampedModel):
+    """
+    Central versioned exchange & precious metal reference matrix (13 TRY-pivoted rates).
+    Independent from products and pricing recipes; recipes store their own snapshot.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Taslak"
+        ACTIVE = "ACTIVE", "Aktif"
+        ARCHIVED = "ARCHIVED", "Arşivlendi"
+
+    organization = models.ForeignKey(
+        "organizations.Organization",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="exchange_metal_matrices",
+    )
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT, db_index=True)
+    effective_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    note = models.CharField(max_length=240, blank=True, default="")
+
+    class Meta:
+        db_table = "market_exchange_metal_matrix"
+        ordering = ["-version", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "version"],
+                condition=Q(organization__isnull=False),
+                name="uniq_org_exchange_metal_matrix_version",
+            ),
+            models.UniqueConstraint(
+                fields=["version"],
+                condition=Q(organization__isnull=True),
+                name="uniq_global_exchange_metal_matrix_version",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        scope = self.organization.code if self.organization_id else "GLOBAL"
+        return f"{scope} Matris v{self.version} ({self.status})"
+
+
+class ExchangeMetalRate(TimestampedModel):
+    """Base TRY reference rate row belonging to an ExchangeMetalMatrix version."""
+
+    class Unit(models.TextChoices):
+        UNIT = "UNIT", "1 Birim / TRY"
+        TROY_OZ = "TROY_OZ", "1 Troy Ons / TRY"
+
+    matrix = models.ForeignKey(
+        ExchangeMetalMatrix,
+        on_delete=models.CASCADE,
+        related_name="rates",
+    )
+    currency_code = models.CharField(max_length=8, db_index=True)
+    base_value_try = models.DecimalField(max_digits=16, decimal_places=4)
+    unit = models.CharField(max_length=16, choices=Unit.choices, default=Unit.UNIT)
+    precision = models.PositiveSmallIntegerField(default=4)
+
+    class Meta:
+        db_table = "market_exchange_metal_rate"
+        ordering = ["currency_code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["matrix", "currency_code"],
+                name="uniq_exchange_metal_rate_code",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.currency_code}={self.base_value_try} TRY (v{self.matrix.version})"

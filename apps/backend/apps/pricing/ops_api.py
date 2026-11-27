@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import Max, Q
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.request import Request
@@ -8,6 +9,7 @@ from rest_framework.views import APIView
 from apps.audit.services import record_audit
 from apps.authorization.permissions import HasPortalPermission
 from apps.catalog.models import ProductModel
+from apps.market.matrix_services import get_or_create_active_matrix, serialize_exchange_metal_matrix
 from apps.common.responses import (
     GRAM_Q,
     MONEY_Q,
@@ -65,6 +67,11 @@ def serialize_ops_recipe(r: PricingRecipe) -> dict:
         "pricingMode": r.pricing_mode,
         "lcCurrency": r.lc_currency,
         "lastSnapshotId": r.last_snapshot.snapshot_code if r.last_snapshot else None,
+        "sourceMatrixId": str(r.source_matrix_id) if r.source_matrix_id else None,
+        "sourceMatrixVersion": r.source_matrix_version,
+        "appliedRatesSnapshot": r.applied_rates_snapshot or {},
+        "appliedAt": r.applied_at.isoformat() if r.applied_at else None,
+        "overrideMetadata": r.override_metadata or {},
         "cachedTotalCostLc": dec_str(r.cached_total_cost_lc, MONEY_Q),
         "cachedB2bTry": dec_str(r.cached_b2b_try, MONEY_Q),
         "cachedB2cTry": dec_str(r.cached_b2c_try, MONEY_Q),
@@ -121,12 +128,16 @@ class OpsRecipeCreateSerializer(serializers.Serializer):
     parentSku = serializers.CharField(max_length=32)
     pricingMode = serializers.ChoiceField(choices=PricingRecipe.PricingMode.values, default=PricingRecipe.PricingMode.DETAILED)
     lcCurrency = serializers.CharField(max_length=8, default="TRY")
+    appliedRatesSnapshot = serializers.DictField(required=False)
+    overrideMetadata = serializers.DictField(required=False)
 
 
 class OpsRecipeUpdateSerializer(serializers.Serializer):
     pricingMode = serializers.ChoiceField(choices=PricingRecipe.PricingMode.values, required=False)
     lcCurrency = serializers.CharField(max_length=8, required=False)
     status = serializers.ChoiceField(choices=[PricingRecipe.Status.DRAFT, PricingRecipe.Status.ARCHIVED], required=False)
+    appliedRatesSnapshot = serializers.DictField(required=False)
+    overrideMetadata = serializers.DictField(required=False)
 
 
 class OpsCostLineCreateSerializer(serializers.Serializer):
@@ -212,12 +223,25 @@ class OpsPricingRecipeListCreateView(APIView):
             raise DomainError("Ürün modeli bulunamadı.", code="PRODUCT_NOT_FOUND", status_code=404)
 
         max_ver = PricingRecipe.objects.filter(product=product).aggregate(v=Max("version")).get("v") or 0
+        active_matrix = get_or_create_active_matrix(actor=request.user)
+        matrix_data = serialize_exchange_metal_matrix(active_matrix)
+        snapshot_rates = d.get("appliedRatesSnapshot") or {
+            "sourceMatrixId": matrix_data["id"],
+            "sourceMatrixVersion": matrix_data["version"],
+            "fxBaseRates": matrix_data["fxBaseRates"],
+            "liveHasGoldTrySell": matrix_data["liveHasGoldTrySell"],
+        }
         recipe = PricingRecipe.objects.create(
             product=product,
             version=max_ver + 1,
             status=PricingRecipe.Status.DRAFT,
             pricing_mode=d["pricingMode"],
             lc_currency=d["lcCurrency"].strip().upper()[:8],
+            source_matrix=active_matrix,
+            source_matrix_version=active_matrix.version,
+            applied_rates_snapshot=snapshot_rates,
+            applied_at=timezone.now(),
+            override_metadata=d.get("overrideMetadata") or {},
         )
         record_audit(
             action="OPS_PRICING_RECIPE_CREATED",
@@ -263,6 +287,17 @@ class OpsPricingRecipeDetailView(APIView):
             recipe.lc_currency = d["lcCurrency"].strip().upper()[:8]
         if "status" in d:
             recipe.status = d["status"]
+        if "appliedRatesSnapshot" in d:
+            if recipe.status == PricingRecipe.Status.PUBLISHED:
+                raise DomainError(
+                    "Yayınlanmış fiyat reçetesinin snapshot değerleri değiştirilemez; yeni sürüm oluşturun.",
+                    code="RECIPE_IMMUTABLE",
+                    status_code=400,
+                )
+            recipe.applied_rates_snapshot = d["appliedRatesSnapshot"]
+            recipe.applied_at = timezone.now()
+        if "overrideMetadata" in d:
+            recipe.override_metadata = d["overrideMetadata"]
         recipe.save()
 
         record_audit(

@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Diamond,
   FileSpreadsheet,
+  Globe,
   Hammer,
   Layers,
   LayoutDashboard,
@@ -111,6 +112,7 @@ const OPS_NAV_GROUPS = [
     group: 'Ayarlar',
     items: [
       { to: '/ops/ayarlar', label: 'Sistem Ayarları', icon: Settings2 },
+      { to: '/ops/ayarlar/kur-matrisi', label: 'Çapraz Kur & Değerli Metal Matrisi', icon: Globe },
       { to: '/ops/mail-loglari', label: 'Mail Logları', icon: Mail },
       { to: '/ops/tanimlar', label: 'Tanım Yönetimi', icon: BookMarked },
     ],
@@ -142,6 +144,7 @@ const OPS_TITLES: Record<string, string> = {
   '/ops/api-anahtarlari': 'API Anahtarları',
   '/ops/webhookler': 'Webhooklar',
   '/ops/ayarlar': 'Sistem Ayarları',
+  '/ops/ayarlar/kur-matrisi': 'Çapraz Kur & Değerli Metal Matrisi',
   '/ops/mail-loglari': 'Mail Logları',
   '/ops/tanimlar': 'Tanım Yönetimi',
 };
