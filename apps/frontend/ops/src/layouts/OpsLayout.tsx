@@ -341,20 +341,46 @@ export function OpsLayout() {
           <div className="flex items-center gap-3 shrink-0 text-caption">
             <ThemeToggle compact className="border border-border bg-background hover:bg-muted" />
             <Link
-              to="/ops/fiyat-motoru"
-              className="hidden md:flex items-center gap-3 px-3 py-1.5 rounded-md border border-border bg-muted font-sku tabular-nums whitespace-nowrap shrink-0 hover:border-ring transition-colors"
+              to="/ops/ayarlar/kur-matrisi"
+              title="Çapraz Kur & Değerli Metal Matrisini Aç"
+              className="hidden md:flex items-center overflow-hidden w-[260px] lg:w-[360px] xl:w-[440px] px-3 py-1.5 rounded-md border border-border bg-muted font-sku tabular-nums shrink-0 hover:border-ring transition-colors group"
             >
-              <span>
-                HAS <strong className="text-foreground">{formatTrNumber(rates.liveHasGoldTrySell, 2)}</strong> TL
-              </span>
-              <span className="text-border">|</span>
-              <span>
-                USD <strong className="text-foreground">{formatTrNumber(rates.liveUsdSell, 2)}</strong>
-              </span>
-              <span className="text-border">|</span>
-              <span>
-                EUR <strong className="text-foreground">{formatTrNumber(rates.liveEurSell, 2)}</strong>
-              </span>
+              <style>{`
+                @keyframes ops-rate-marquee {
+                  0% { transform: translateX(0%); }
+                  100% { transform: translateX(-50%); }
+                }
+                .ops-rate-track {
+                  display: flex;
+                  width: max-content;
+                  animation: ops-rate-marquee 32s linear infinite;
+                }
+                .group:hover .ops-rate-track {
+                  animation-play-state: paused;
+                }
+              `}</style>
+              <div className="ops-rate-track items-center gap-3 whitespace-nowrap text-xs">
+                {[0, 1].map((dup) => (
+                  <div key={dup} className="flex items-center gap-3 pr-3">
+                    <span>
+                      HAS <strong className="text-foreground">{formatTrNumber(rates.liveHasGoldTrySell, 2)}</strong> TL
+                    </span>
+                    {(['USD', 'EUR', 'GBP', 'CHF', 'JPY', 'CNY', 'AUD', 'CAD', 'XAU', 'XAG', 'XPT', 'XPD'] as const).map(
+                      (code) => (
+                        <span key={`${dup}-${code}`} className="inline-flex items-center gap-3">
+                          <span className="text-border">|</span>
+                          <span>
+                            {code}{' '}
+                            <strong className="text-foreground">
+                              {formatTrNumber(rates.fxBaseRates?.[code] ?? 0, code === 'JPY' ? 4 : 2)}
+                            </strong>
+                          </span>
+                        </span>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
             </Link>
             {isB2cStorefrontEnabled() ? (
               <a
