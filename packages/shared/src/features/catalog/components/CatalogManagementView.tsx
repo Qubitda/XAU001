@@ -48,6 +48,7 @@ import {
   matchesDefinitionValue,
   resolveDefinitionLabel,
   useDefinitionOptions,
+  type DefinitionOption,
 } from '../../definitions/hooks/useDefinitionsQuery';
 import { LEGACY_STOREFRONT_CATEGORY_CODES } from '../../definitions/storefrontCategories';
 
@@ -59,29 +60,31 @@ export function CatalogManagementView() {
   const deleteProductMutation = useDeleteProductMutation();
   const categoryDefs = useDefinitionOptions('kategori');
 
-  const categoryTabs = useMemo(() => {
+  const categoryOptions = useMemo<DefinitionOption[]>(() => {
     // OPS katalog: tüm aktif kategoriler (tanım SSOT). Fallback yalnızca API yokken.
-    const opts =
-      categoryDefs.options.length > 0
-        ? categoryDefs.options
-        : LEGACY_STOREFRONT_CATEGORY_CODES.map((code) => ({
-            value: code,
-            label:
-              code === 'YUZUK'
-                ? 'Yüzük'
-                : code === 'KOLYE'
-                  ? 'Kolye'
-                  : code === 'KUPE'
-                    ? 'Küpe'
-                    : 'Bileklik',
-            code,
-            id: code,
-            meta: {},
-            parentCodes: [] as string[],
-            parentLabels: [] as string[],
-          }));
-    return [{ value: 'Tümü', label: 'Tümü' }, ...opts];
+    return categoryDefs.options.length > 0
+      ? categoryDefs.options
+      : LEGACY_STOREFRONT_CATEGORY_CODES.map((code) => ({
+          value: code,
+          label:
+            code === 'YUZUK'
+              ? 'Yüzük'
+              : code === 'KOLYE'
+                ? 'Kolye'
+                : code === 'KUPE'
+                  ? 'Küpe'
+                  : 'Bileklik',
+          code,
+          id: code,
+          meta: {},
+          parentCodes: [] as string[],
+          parentLabels: [] as string[],
+        }));
   }, [categoryDefs.options]);
+
+  const categoryTabs = useMemo(() => {
+    return [{ value: 'Tümü', label: 'Tümü' }, ...categoryOptions];
+  }, [categoryOptions]);
 
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tümü');
@@ -94,7 +97,7 @@ export function CatalogManagementView() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr-TR');
-    const matchOpts = categoryTabs.filter((t) => t.value !== 'Tümü');
+    const matchOpts = categoryOptions;
     return products
       .filter((p) => {
         if (
@@ -117,7 +120,7 @@ export function CatalogManagementView() {
         thumbUrl: resolveProductThumbnail(product),
         categoryLabel: resolveDefinitionLabel(product.category, matchOpts) || product.category,
       }));
-  }, [products, rates, query, categoryFilter, categoryTabs]);
+  }, [products, rates, query, categoryFilter, categoryOptions]);
 
   const handleConfirmDelete = async () => {
     if (!deletingProduct) return;

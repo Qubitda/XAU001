@@ -51,9 +51,12 @@ function toOption(table: DefinitionTable | undefined, tableCode: string, item: D
 }
 
 export function matchesParent(option: DefinitionOption, parentValue: string): boolean {
-  const value = (parentValue || '').trim();
+  const value = (parentValue || '').trim().toLocaleLowerCase('tr-TR');
   if (!value) return false;
-  return option.parentCodes.includes(value) || option.parentLabels.includes(value);
+  return (
+    option.parentCodes.some((c) => (c || '').trim().toLocaleLowerCase('tr-TR') === value) ||
+    option.parentLabels.some((l) => (l || '').trim().toLocaleLowerCase('tr-TR') === value)
+  );
 }
 
 export function filterOptionsByParent(

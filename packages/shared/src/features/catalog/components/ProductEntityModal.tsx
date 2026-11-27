@@ -502,6 +502,66 @@ export function ProductEntityModal({
     }
   }, [open, mode, initialProduct, initialTab]);
 
+  // Sensible auto-defaults for create mode so the form isn't stuck with empty state
+  useEffect(() => {
+    if (!open || mode !== 'create') return;
+
+    setDraft((prev) => {
+      let changed = false;
+      const updates: Partial<ProductState> = {};
+
+      if (!prev.productType && productTypeOpts.options.length > 0) {
+        updates.productType = productTypeOpts.options[0].value;
+        updates.productKind = resolveProductKind({ productType: updates.productType });
+        changed = true;
+      }
+
+      if (!prev.metalName && metalNameOpts.options.length > 0) {
+        const goldOpt = metalNameOpts.options.find(
+          (o) =>
+            o.label.toLocaleLowerCase('tr-TR') === 'altın' ||
+            o.value.toLocaleLowerCase('tr-TR') === 'altın' ||
+            o.code.toLocaleLowerCase('tr-TR') === 'altin'
+        );
+        updates.metalName = (goldOpt ?? metalNameOpts.options[0]).value;
+        changed = true;
+      }
+
+      return changed ? { ...prev, ...updates } : prev;
+    });
+  }, [open, mode, productTypeOpts.options, metalNameOpts.options]);
+
+  useEffect(() => {
+    if (!open || mode !== 'create' || !draft.metalName) return;
+
+    setDraft((prev) => {
+      let changed = false;
+      const updates: Partial<ProductState> = {};
+
+      if (!prev.purityCode && purityOpts.options.length > 0) {
+        const p14k = purityOpts.options.find(
+          (o) => o.code === '14K' || o.value === '14K' || o.label.includes('14')
+        );
+        updates.purityCode = (p14k ?? purityOpts.options[0]).value as PurityCode;
+        changed = true;
+      }
+
+      if (metalColorOpts.options.length > 0) {
+        if (!prev.metalColor) {
+          updates.metalColor = metalColorOpts.options[0].value as MetalColor;
+          changed = true;
+        }
+        if (prev.availableColors.length === 0) {
+          const firstColor = (updates.metalColor ?? prev.metalColor ?? metalColorOpts.options[0].value) as MetalColor;
+          updates.availableColors = [firstColor];
+          changed = true;
+        }
+      }
+
+      return changed ? { ...prev, ...updates } : prev;
+    });
+  }, [open, mode, draft.metalName, purityOpts.options, metalColorOpts.options]);
+
   const isDirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(baseline),
     [draft, baseline]
@@ -953,6 +1013,9 @@ export function ProductEntityModal({
                   }}
                   className={FIELD_SELECT_CLASS}
                 >
+                  <option value="">
+                    {productTypeOpts.isLoading ? 'Tanımlar yükleniyor...' : 'Seçiniz'}
+                  </option>
                   {withCurrentOption(productTypeOpts.options, draft.productType).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -1044,6 +1107,9 @@ export function ProductEntityModal({
                   }}
                   className={FIELD_SELECT_CLASS}
                 >
+                  <option value="">
+                    {collectionOpts.isLoading ? 'Tanımlar yükleniyor...' : 'Seçiniz'}
+                  </option>
                   {collectionOptions.map((col) => (
                     <option key={col.value} value={col.value}>
                       {col.label}
@@ -1061,6 +1127,7 @@ export function ProductEntityModal({
                   onChange={(e) => patchDraft('styleTechnique', e.target.value)}
                   className={FIELD_SELECT_CLASS}
                 >
+                  <option value="">Seçiniz</option>
                   {withCurrentOption(styleOpts.options, draft.styleTechnique).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -1075,6 +1142,7 @@ export function ProductEntityModal({
                   onChange={(e) => patchDraft('occasion', e.target.value)}
                   className={FIELD_SELECT_CLASS}
                 >
+                  <option value="">Seçiniz</option>
                   {withCurrentOption(occasionOpts.options, draft.occasion).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -1111,6 +1179,7 @@ export function ProductEntityModal({
                       metalName,
                       purityCode: '' as PurityCode,
                       metalColor: '' as MetalColor,
+                      availableColors: [],
                     }));
                     setFieldErrors((prev) => {
                       const copy = { ...prev };
@@ -1123,6 +1192,9 @@ export function ProductEntityModal({
                   }}
                   className={FIELD_SELECT_CLASS}
                 >
+                  <option value="">
+                    {metalNameOpts.isLoading ? 'Tanımlar yükleniyor...' : 'Seçiniz'}
+                  </option>
                   {withCurrentOption(metalNameOpts.options, draft.metalName).map((o) => (
                     <option key={o.value} value={o.value}>
                       {o.label}
@@ -1176,12 +1248,32 @@ export function ProductEntityModal({
                   <Label className="font-medium block">Varsayılan Renk</Label>
                   <select
                     value={draft.metalColor}
-                    onChange={(e) => patchDraft('metalColor', e.target.value as MetalColor)}
+                    onChange={(e) => {
+                      const nextColor = e.target.value as MetalColor;
+                      setDraft((prev) => ({
+                        ...prev,
+                        metalColor: nextColor,
+                        availableColors:
+                          nextColor && !prev.availableColors.includes(nextColor)
+                            ? [...prev.availableColors, nextColor]
+                            : prev.availableColors,
+                      }));
+                      setFieldErrors((prev) => {
+                        const copy = { ...prev };
+                        delete copy.metalColor;
+                        return copy;
+                      });
+                      setServerError(null);
+                    }}
                     className={FIELD_SELECT_CLASS}
-                    disabled={!draft.metalName}
+                    disabled={!draft.metalName || metalColorOpts.isLoading}
                   >
                     <option value="">
-                      {draft.metalName ? 'Seçiniz' : 'Önce metal seçin'}
+                      {!draft.metalName
+                        ? 'Önce metal seçin'
+                        : metalColorOpts.isLoading
+                          ? 'Tanımlar yükleniyor...'
+                          : 'Seçiniz'}
                     </option>
                     {colorOptions.map((c) => (
                       <option key={c.value} value={c.value}>
@@ -1198,9 +1290,12 @@ export function ProductEntityModal({
                   {metalColorOpts.isLoading ? (
                     <span className="text-xs text-muted-foreground">Tanımlar yükleniyor...</span>
                   ) : null}
-                  {!metalColorOpts.isLoading && COLORS.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">
-                      Tanım tablosunda aktif metal rengi yok.{' '}
+                  {!metalColorOpts.isLoading && !draft.metalName ? (
+                    <span className="text-xs text-muted-foreground">Önce maden adı seçin.</span>
+                  ) : null}
+                  {!metalColorOpts.isLoading && draft.metalName && COLORS.length === 0 ? (
+                    <span className="text-xs text-rose-600">
+                      Seçilen metal ({draft.metalName}) için tanım tablosunda aktif renk bulunamadı.{' '}
                       <Link to="/ops/tanimlar" className="underline text-foreground">
                         Tanım Yönetimi
                       </Link>
