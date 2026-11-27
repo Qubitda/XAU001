@@ -850,9 +850,36 @@ export function ProductEntityModal({
     const resolvedStatus: CatalogStatus =
       targetStatus ?? draft.catalogStatus ?? (mode === 'create' ? 'DRAFT' : 'ACTIVE');
 
-    const payload: ProductState = {
+    const selectedChannels = draft.salesChannels ?? [];
+    const existingRules = draft.ledger.channelRules.filter((r) =>
+      selectedChannels.includes(r.channel)
+    );
+    const syncedRules: ChannelPricingRule[] = [...existingRules];
+    for (const ch of selectedChannels) {
+      if (
+        (ch === 'B2B' || ch === 'B2B_API' || ch === 'B2C_API') &&
+        !syncedRules.some((r) => r.channel === ch)
+      ) {
+        syncedRules.push({
+          id: `ch-${Date.now()}-${ch.toLowerCase()}`,
+          channel: ch,
+          profit: { unit: '%', value: ch === 'B2C_API' ? 45 : 15 },
+          discount: { unit: '%', value: 0 },
+          platformFee: { unit: '%', value: 1 },
+        });
+      }
+    }
+    const syncedDraft: ProductState = {
       ...draft,
-      ...buildDetailPayload(draft, finenessMap),
+      ledger: {
+        ...draft.ledger,
+        channelRules: syncedRules,
+      },
+    };
+
+    const payload: ProductState = {
+      ...syncedDraft,
+      ...buildDetailPayload(syncedDraft, finenessMap),
       catalogStatus: resolvedStatus,
       parentSku: normalizedSku,
       title: draft.title.trim(),

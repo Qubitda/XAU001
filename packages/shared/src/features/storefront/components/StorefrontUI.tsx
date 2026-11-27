@@ -439,6 +439,8 @@ export function StorefrontProductCard({
                   ₺{formatTrNumber(metrics.discountedB2cPriceTry, 0)}
                 </p>
               </>
+            ) : product.salesChannels?.includes('B2C_API') ? (
+              <p className="text-xs text-muted-foreground">Fiyat güncelleniyor</p>
             ) : (
               <p className="text-xs text-muted-foreground">Yalnızca bayi kanalında</p>
             )}
@@ -471,6 +473,8 @@ export function StorefrontProductCard({
                       {formatTrNumber(metrics.discountedB2cPriceTry, 0)} TL
                     </div>
                   </>
+                ) : product.salesChannels?.includes('B2C_API') ? (
+                  <div className="text-xs text-muted-foreground">Fiyat güncelleniyor</div>
                 ) : (
                   <div className="text-xs text-muted-foreground">Yalnızca bayi kanalında</div>
                 )}
