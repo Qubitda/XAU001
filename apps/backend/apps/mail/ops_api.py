@@ -244,3 +244,18 @@ class OpsSmtpTestMailView(APIView):
             },
         )
         return envelope_response({"mailLogId": log_id, "to": to}, request)
+
+
+class OpsSmtpConnectionTestView(APIView):
+    permission_classes = [IsAuthenticated, HasPortalPermission]
+    required_permission = "mail:manage"
+
+    def post(self, request: Request):
+        ctx = resolve_tenant_context(request)
+        org = None
+        if not ctx.is_ops:
+            if ctx.organization is None:
+                raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
+            org = ctx.organization
+        result = MailService().test_smtp_connection(organization=org)
+        return envelope_response(result, request)

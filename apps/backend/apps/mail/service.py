@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import smtplib
+import time
 from dataclasses import dataclass
 from email.utils import formataddr
 from typing import Any
@@ -98,6 +100,85 @@ class MailService:
             from_email=row.from_email,
             source=source,
         )
+
+    def test_smtp_connection(self, *, organization: Organization | None = None) -> dict[str, Any]:
+        """Verify SMTP TCP + TLS + authentication synchronously."""
+        started = time.monotonic()
+        try:
+            smtp = self.resolve_smtp(organization=organization)
+        except Exception as exc:
+            return {
+                "connected": False,
+                "status": "disconnected",
+                "host": "",
+                "port": 0,
+                "encryption": "",
+                "latencyMs": 0,
+                "errorCode": "CONFIG_ERROR",
+                "message": f"SMTP ayarları okunamadı: {exc}",
+            }
+
+        if smtp.source == "django_settings" and smtp.host in ("localhost", "127.0.0.1", "") and not smtp.password:
+            return {
+                "connected": False,
+                "status": "disconnected",
+                "host": smtp.host,
+                "port": smtp.port,
+                "encryption": smtp.encryption,
+                "latencyMs": 0,
+                "errorCode": "NOT_CONFIGURED",
+                "message": "Henüz platform SMTP ayarı tanımlanmamış.",
+            }
+
+        try:
+            conn = get_connection(
+                backend="django.core.mail.backends.smtp.EmailBackend",
+                host=smtp.host,
+                port=smtp.port,
+                username=smtp.username,
+                password=smtp.password,
+                use_tls=(smtp.encryption == "TLS"),
+                use_ssl=(smtp.encryption == "SSL"),
+                timeout=10,
+            )
+            conn.open()
+            conn.close()
+            latency_ms = int((time.monotonic() - started) * 1000)
+            return {
+                "connected": True,
+                "status": "connected",
+                "host": smtp.host,
+                "port": smtp.port,
+                "encryption": smtp.encryption,
+                "latencyMs": latency_ms,
+                "errorCode": "",
+                "message": f"SMTP bağlantısı ve kimlik doğrulama başarılı ({smtp.host}:{smtp.port}, {latency_ms} ms).",
+            }
+        except smtplib.SMTPAuthenticationError as exc:
+            latency_ms = int((time.monotonic() - started) * 1000)
+            raw_msg = exc.smtp_error.decode("utf-8", errors="replace") if isinstance(exc.smtp_error, bytes) else str(exc.smtp_error)
+            return {
+                "connected": False,
+                "status": "disconnected",
+                "host": smtp.host,
+                "port": smtp.port,
+                "encryption": smtp.encryption,
+                "latencyMs": latency_ms,
+                "errorCode": f"SMTP_AUTH_{exc.smtp_code}",
+                "message": f"SMTP kimlik doğrulama hatası ({exc.smtp_code}): {raw_msg}",
+            }
+        except Exception as exc:
+            latency_ms = int((time.monotonic() - started) * 1000)
+            return {
+                "connected": False,
+                "status": "disconnected",
+                "host": smtp.host,
+                "port": smtp.port,
+                "encryption": smtp.encryption,
+                "latencyMs": latency_ms,
+                "errorCode": "SMTP_CONNECTION_ERROR",
+                "message": f"SMTP bağlantı hatası: {exc}",
+            }
 
     def resolve_template(
         self,

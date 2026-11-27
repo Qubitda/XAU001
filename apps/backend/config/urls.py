@@ -58,6 +58,7 @@ from apps.mail.ops_api import (
     OpsMailLogsView,
     OpsSmtpSettingsView,
     OpsSmtpTestMailView,
+    OpsSmtpConnectionTestView,
 )
 from apps.commerce.ops_api import (
     OpsB2bOrderDetailView,
@@ -571,6 +572,7 @@ urlpatterns = [
     path("api/v1/ops/audit-logs/<uuid:log_id>", OpsAuditLogDetailView.as_view(), name="ops-audit-log-detail"),
     path("api/v1/ops/mail/smtp-settings", OpsSmtpSettingsView.as_view(), name="ops-mail-smtp"),
     path("api/v1/ops/mail/smtp-settings/test", OpsSmtpTestMailView.as_view(), name="ops-mail-smtp-test"),
+    path("api/v1/ops/mail/smtp-settings/verify", OpsSmtpConnectionTestView.as_view(), name="ops-mail-smtp-verify"),
     path("api/v1/ops/mail/templates", OpsEmailTemplatesView.as_view(), name="ops-mail-templates"),
     path("api/v1/ops/mail/logs", OpsMailLogsView.as_view(), name="ops-mail-logs"),
     path(

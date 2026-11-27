@@ -146,6 +146,12 @@ export function OpsSettingsPage() {
   const [fromName, setFromName] = useState('Tara Gold');
   const [fromEmail, setFromEmail] = useState('');
   const [testTo, setTestTo] = useState('');
+  const [smtpTest, setSmtpTest] = useState<{
+    status: 'idle' | 'testing' | 'connected' | 'disconnected';
+    message: string;
+    latencyMs?: number;
+    errorCode?: string;
+  }>({ status: 'idle', message: '' });
 
   // Templates
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
@@ -389,6 +395,51 @@ export function OpsSettingsPage() {
     }
   };
 
+  const testSmtpConnection = useCallback(async () => {
+    setError(null);
+    setSmtpTest({ status: 'testing', message: 'SMTP bağlantısı ve kimlik doğrulama test ediliyor...' });
+    try {
+      const res = await apiFetch<{
+        connected: boolean;
+        status: 'connected' | 'disconnected';
+        host: string;
+        port: number;
+        latencyMs: number;
+        errorCode?: string;
+        message: string;
+      }>('/api/v1/ops/mail/smtp-settings/verify', {
+        method: 'POST',
+        body: {},
+      });
+      const data = res.data;
+      if (data?.connected) {
+        setSmtpTest({
+          status: 'connected',
+          message: data.message,
+          latencyMs: data.latencyMs,
+        });
+      } else {
+        setSmtpTest({
+          status: 'disconnected',
+          message: data?.message || 'SMTP bağlantısı kurulamadı.',
+          latencyMs: data?.latencyMs,
+          errorCode: data?.errorCode,
+        });
+      }
+    } catch (e) {
+      setSmtpTest({
+        status: 'disconnected',
+        message: e instanceof Error ? e.message : 'SMTP bağlantı testi başarısız.',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tab === 'smtp' && smtp?.host && smtpTest.status === 'idle') {
+      void testSmtpConnection();
+    }
+  }, [tab, smtp?.host, smtpTest.status, testSmtpConnection]);
+
   const saveSmtp = async () => {
     setError(null);
     setOk(null);
@@ -409,6 +460,7 @@ export function OpsSettingsPage() {
       setPassword('');
       setOk('SMTP ayarları kaydedildi.');
       await loadSmtp();
+      await testSmtpConnection();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kaydedilemedi');
     }
@@ -732,10 +784,48 @@ export function OpsSettingsPage() {
 
       {tab === 'smtp' && (
         <PortalDataCard title="Platform SMTP" contentClassName="p-6 space-y-4">
-          {smtp && (
-            <p className="text-xs text-muted-foreground">
-              Son kayıt: {smtp.host}:{smtp.port} · {smtp.hasPassword ? 'Şifre tanımlı' : 'Şifre yok'}
-            </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {smtp ? (
+              <span className="text-muted-foreground">
+                Son kayıt: {smtp.host}:{smtp.port} · {smtp.hasPassword ? 'Şifre tanımlı' : 'Şifre yok'}
+              </span>
+            ) : (
+              <Badge variant="outline">SMTP ayarları yok</Badge>
+            )}
+            {smtpTest.status === 'connected' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-[11px]">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                Bağlı {smtpTest.latencyMs != null ? `(${smtpTest.latencyMs} ms)` : ''}
+              </span>
+            )}
+            {smtpTest.status === 'disconnected' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 font-medium text-[11px]">
+                <span className="w-2 h-2 rounded-full bg-red-600" />
+                Kopuk
+              </span>
+            )}
+            {smtpTest.status === 'testing' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-700 font-medium text-[11px]">
+                Test ediliyor...
+              </span>
+            )}
+            {smtpTest.status === 'idle' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 font-medium text-[11px]">
+                Test edilmedi
+              </span>
+            )}
+          </div>
+
+          {smtpTest.status === 'connected' && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800 font-medium">
+              {smtpTest.message}
+            </div>
+          )}
+          {smtpTest.status === 'disconnected' && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800 font-medium break-all">
+              {smtpTest.message}
+              {smtpTest.errorCode ? ` (Kod: ${smtpTest.errorCode})` : ''}
+            </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -787,6 +877,14 @@ export function OpsSettingsPage() {
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => void saveSmtp()}>
               Kaydet
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={smtpTest.status === 'testing'}
+              onClick={() => void testSmtpConnection()}
+            >
+              {smtpTest.status === 'testing' ? 'Test Ediliyor...' : 'Bağlantıyı Test Et'}
             </Button>
             <div className="flex items-center gap-2">
               <Input
