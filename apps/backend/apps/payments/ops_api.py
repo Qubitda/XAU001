@@ -29,6 +29,7 @@ from .models import (
     RefundLog,
     RefundRequest,
 )
+from .iyzico_client import test_iyzico_connection
 from .services import cancel_payment_transaction, refund_payment_transaction
 
 
@@ -221,6 +222,24 @@ class OpsPaymentProviderSettingsView(APIView):
             row.secret_key_ciphertext = existing.secret_key_ciphertext
         row.save()
         return envelope_response(_ser_provider(row), request, status=201)
+
+
+class OpsPaymentProviderTestView(APIView):
+    permission_classes = [IsAuthenticated, HasPortalPermission]
+    required_permission = "payments:manage"
+
+    def post(self, request: Request):
+        ctx = resolve_tenant_context(request)
+        org_id = None
+        if not ctx.is_ops:
+            if ctx.organization is None:
+                raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
+            org_id = str(ctx.organization.id)
+        elif request.data.get("organizationId"):
+            org_id = str(request.data.get("organizationId"))
+
+        result = test_iyzico_connection(organization_id=org_id)
+        return envelope_response(result, request)
 
 
 class OpsPaymentTransactionsView(APIView):

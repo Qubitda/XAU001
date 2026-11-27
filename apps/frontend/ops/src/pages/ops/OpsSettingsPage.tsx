@@ -110,6 +110,12 @@ export function OpsSettingsPage() {
   const [callbackBaseUrl, setCallbackBaseUrl] = useState('');
   const [isSandbox, setIsSandbox] = useState(true);
   const [passFee, setPassFee] = useState(true);
+  const [iyzicoTest, setIyzicoTest] = useState<{
+    status: 'idle' | 'testing' | 'connected' | 'disconnected';
+    message: string;
+    latencyMs?: number;
+    errorCode?: string;
+  }>({ status: 'idle', message: '' });
 
   // Banks
   const [banks, setBanks] = useState<BankRow[]>([]);
@@ -203,6 +209,55 @@ export function OpsSettingsPage() {
     setBodyHtml(existing?.bodyHtml ?? '');
   }, [editKey, templates]);
 
+  const testPaymentConnection = useCallback(async () => {
+    setError(null);
+    setIyzicoTest({ status: 'testing', message: 'iyzico API bağlantısı test ediliyor...' });
+    try {
+      const res = await apiFetch<{
+        connected: boolean;
+        status: 'connected' | 'disconnected';
+        baseUrl: string;
+        latencyMs: number;
+        errorCode?: string;
+        message: string;
+      }>('/api/v1/ops/payments/provider-settings/test', {
+        method: 'POST',
+        body: {},
+      });
+      const data = res.data;
+      if (data?.connected) {
+        setIyzicoTest({
+          status: 'connected',
+          message: data.message,
+          latencyMs: data.latencyMs,
+        });
+      } else {
+        setIyzicoTest({
+          status: 'disconnected',
+          message: data?.message || 'iyzico bağlantısı kurulamadı.',
+          latencyMs: data?.latencyMs,
+          errorCode: data?.errorCode,
+        });
+      }
+    } catch (e) {
+      setIyzicoTest({
+        status: 'disconnected',
+        message: e instanceof Error ? e.message : 'Bağlantı testi başarısız.',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      tab === 'payment' &&
+      provider?.hasApiKey &&
+      provider?.hasSecretKey &&
+      iyzicoTest.status === 'idle'
+    ) {
+      void testPaymentConnection();
+    }
+  }, [tab, provider?.hasApiKey, provider?.hasSecretKey, iyzicoTest.status, testPaymentConnection]);
+
   const savePayment = async () => {
     setError(null);
     setOk(null);
@@ -223,6 +278,7 @@ export function OpsSettingsPage() {
       setSecretKey('');
       setOk('Ödeme ayarları kaydedildi (anahtarlar AES-256 ile şifrelendi).');
       await loadPayment();
+      await testPaymentConnection();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Kaydedilemedi');
     }
@@ -360,7 +416,7 @@ export function OpsSettingsPage() {
 
       {tab === 'payment' && (
         <PortalDataCard title="iyzico API Kimlik Bilgileri" contentClassName="p-6 space-y-4">
-          <div className="flex flex-wrap gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             {provider?.hasApiKey ? <Badge variant="secondary">API Key tanımlı</Badge> : <Badge variant="outline">API Key yok</Badge>}
             {provider?.hasSecretKey ? (
               <Badge variant="secondary">Secret Key tanımlı</Badge>
@@ -368,7 +424,41 @@ export function OpsSettingsPage() {
               <Badge variant="outline">Secret Key yok</Badge>
             )}
             <Badge variant="outline">{isSandbox ? 'Sandbox' : 'Production'}</Badge>
+            {iyzicoTest.status === 'connected' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium text-[11px]">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                Bağlı {iyzicoTest.latencyMs != null ? `(${iyzicoTest.latencyMs} ms)` : ''}
+              </span>
+            )}
+            {iyzicoTest.status === 'disconnected' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 font-medium text-[11px]">
+                <span className="w-2 h-2 rounded-full bg-red-600" />
+                Kopuk
+              </span>
+            )}
+            {iyzicoTest.status === 'testing' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-700 font-medium text-[11px]">
+                Test ediliyor...
+              </span>
+            )}
+            {iyzicoTest.status === 'idle' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-600 font-medium text-[11px]">
+                Test edilmedi
+              </span>
+            )}
           </div>
+
+          {iyzicoTest.status === 'connected' && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800 font-medium">
+              {iyzicoTest.message}
+            </div>
+          )}
+          {iyzicoTest.status === 'disconnected' && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-800 font-medium">
+              {iyzicoTest.message}
+              {iyzicoTest.errorCode ? ` (Kod: ${iyzicoTest.errorCode})` : ''}
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>API Key</Label>
@@ -422,9 +512,19 @@ export function OpsSettingsPage() {
               <Label htmlFor="passFee">Taksit vade farkını müşteriye yansıt</Label>
             </div>
           </div>
-          <Button type="button" onClick={() => void savePayment()}>
-            Kaydet
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" onClick={() => void savePayment()}>
+              Kaydet
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={iyzicoTest.status === 'testing'}
+              onClick={() => void testPaymentConnection()}
+            >
+              {iyzicoTest.status === 'testing' ? 'Test Ediliyor...' : 'Bağlantıyı Test Et'}
+            </Button>
+          </div>
         </PortalDataCard>
       )}
 

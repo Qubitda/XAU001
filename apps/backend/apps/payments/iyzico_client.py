@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from decimal import Decimal
 from typing import Any
 
@@ -159,3 +160,61 @@ def refund_payment_item(
         payload["conversationId"] = conversation_id
     raw = iyzipay.Refund().create(payload, options)
     return _parse_response(raw)
+
+
+def test_iyzico_connection(*, organization_id: str | None = None) -> dict[str, Any]:
+    """
+    Verify stored/env iyzico credentials with a lightweight signed InstallmentInfo call.
+    Returns structured status: {connected, status, baseUrl, latencyMs, errorCode, message}.
+    """
+    started = time.monotonic()
+    try:
+        options = get_iyzico_options(organization_id=organization_id)
+    except IyzicoNotConfigured as exc:
+        return {
+            "connected": False,
+            "status": "disconnected",
+            "baseUrl": "",
+            "latencyMs": 0,
+            "errorCode": "NOT_CONFIGURED",
+            "message": str(exc),
+        }
+
+    base_url = options["base_url"]
+    try:
+        resp = fetch_installment_info(
+            bin_number="554960",
+            price="100",
+            organization_id=organization_id,
+        )
+        latency_ms = int((time.monotonic() - started) * 1000)
+        if str(resp.get("status", "")).lower() == "success":
+            return {
+                "connected": True,
+                "status": "connected",
+                "baseUrl": base_url,
+                "latencyMs": latency_ms,
+                "errorCode": "",
+                "message": f"iyzico API bağlantısı başarılı ({base_url}, {latency_ms} ms).",
+            }
+        return {
+            "connected": False,
+            "status": "disconnected",
+            "baseUrl": base_url,
+            "latencyMs": latency_ms,
+            "errorCode": str(resp.get("errorCode") or "AUTH_FAILED"),
+            "message": str(
+                resp.get("errorMessage")
+                or "iyzico kimlik doğrulaması başarısız. API Key / Secret Key / Ortam (Sandbox-Prod) uyumunu kontrol edin."
+            ),
+        }
+    except Exception as exc:
+        latency_ms = int((time.monotonic() - started) * 1000)
+        return {
+            "connected": False,
+            "status": "disconnected",
+            "baseUrl": base_url,
+            "latencyMs": latency_ms,
+            "errorCode": "CONNECTION_ERROR",
+            "message": f"iyzico sunucusuna bağlanılamadı: {exc}",
+        }

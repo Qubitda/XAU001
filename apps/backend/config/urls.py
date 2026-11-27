@@ -591,6 +591,7 @@ from apps.payments.ops_api import (
     OpsManualBankRefundView,
     OpsPaymentCancelView,
     OpsPaymentProviderSettingsView,
+    OpsPaymentProviderTestView,
     OpsPaymentReceiptFileView,
     OpsPaymentRefundView,
     OpsPaymentTransactionDetailView,
@@ -612,6 +613,11 @@ urlpatterns += [
         "api/v1/ops/payments/provider-settings",
         OpsPaymentProviderSettingsView.as_view(),
         name="ops-payment-provider-settings",
+    ),
+    path(
+        "api/v1/ops/payments/provider-settings/test",
+        OpsPaymentProviderTestView.as_view(),
+        name="ops-payment-provider-settings-test",
     ),
     path(
         "api/v1/ops/payments/bank-accounts",
