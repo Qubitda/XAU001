@@ -13,6 +13,7 @@ import {
   Menu,
   Package,
   Phone,
+  Search,
   Settings,
   ShoppingBag,
   User,
@@ -132,6 +133,17 @@ const LEGAL_FALLBACK: Record<Exclude<LegalTopic, null>, { title: string; body: s
 export function StorefrontLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isHomePage = location.pathname === '/';
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const isTransparentHeader = isHomePage && !isScrolled;
   const { user, authenticated, logout } = useAuth();
   const { setB2cCartOpen } = useCommerceUI();
   const b2cCartQuery = useB2cCartQuery();
@@ -332,40 +344,63 @@ export function StorefrontLayout() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* 1. Top Utility Information Bar */}
-      <div className="bg-background border-b border-border/90 text-[11px] text-muted-foreground">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-9 flex items-center justify-between gap-3">
-          <div className="inline-flex items-center gap-1.5 min-w-0 truncate">
-            <TaraStarMark className="w-3 h-3 shrink-0" />
-            <span className="truncate">Ücretsiz Sigortalı Kargo · Güvenli Alışveriş</span>
-          </div>
+    <div className="min-h-screen flex flex-col bg-background text-foreground overflow-x-hidden">
+      <div
+        className={
+          isHomePage
+            ? 'fixed top-0 inset-x-0 z-40 transition-colors duration-300'
+            : 'sticky top-0 z-40'
+        }
+      >
+        {/* 1. Top Utility Information Bar */}
+        <div
+          className={`text-[11px] transition-colors duration-300 ${
+            isTransparentHeader
+              ? 'bg-transparent border-b border-black/10 text-black'
+              : 'bg-background border-b border-border/90 text-muted-foreground'
+          }`}
+        >
+          <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 h-9 flex items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-1.5 min-w-0 truncate">
+              <TaraStarMark className="w-3 h-3 shrink-0" />
+              <span className="truncate">Ücretsiz Sigortalı Kargo · Güvenli Alışveriş</span>
+            </div>
 
-          <div className="hidden md:flex items-center gap-3 shrink-0">
-            {showB2bPortal ? (
-              <>
-                <a
-                  href={b2bPortalHref}
-                  className="hover:text-foreground text-muted-foreground font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                >
-                  Bayi Portalı
-                </a>
-                <span className="h-3 w-px bg-border" aria-hidden="true" />
-              </>
-            ) : null}
-            <a
-              href="#musteri-hizmetleri"
-              className="hover:text-foreground transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-            >
-              Müşteri Hizmetleri
-            </a>
+            <div className="hidden md:flex items-center gap-3 shrink-0">
+              {showB2bPortal ? (
+                <>
+                  <a
+                    href={b2bPortalHref}
+                    className={`font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
+                      isTransparentHeader ? 'text-black hover:text-black/75' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Bayi Portalı
+                  </a>
+                  <span className={`h-3 w-px ${isTransparentHeader ? 'bg-black/20' : 'bg-border'}`} aria-hidden="true" />
+                </>
+              ) : null}
+              <a
+                href="#musteri-hizmetleri"
+                className={`transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
+                  isTransparentHeader ? 'text-black hover:text-black/75' : 'hover:text-foreground'
+                }`}
+              >
+                Müşteri Hizmetleri
+              </a>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* 2. Main Sticky Storefront Header */}
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 md:h-[74px]">
+        {/* 2. Main Sticky Storefront Header */}
+        <header
+          className={`transition-colors duration-300 ${
+            isTransparentHeader
+              ? 'bg-transparent border-b border-transparent'
+              : 'bg-background/95 backdrop-blur-sm border-b border-border'
+          }`}
+        >
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 h-16 md:h-[84px]">
           {/* Mobile Bar (< 768px): Hamburger Left | Centered Logo | Minimal Bag & Favorites Right */}
           <div className="md:hidden h-full grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <div className="justify-self-start flex items-center">
@@ -455,8 +490,8 @@ export function StorefrontLayout() {
                     aria-current={active ? 'page' : undefined}
                     className={`relative py-2 text-[13px] lg:text-[14px] font-medium tracking-[0.015em] whitespace-nowrap shrink-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-sm ${
                       active
-                        ? 'text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-[1.5px] after:bg-primary'
-                        : 'text-muted-foreground hover:text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-[1.5px] after:bg-transparent hover:after:bg-primary/50 after:transition-colors'
+                        ? `${isTransparentHeader ? 'text-black' : 'text-foreground'} after:absolute after:inset-x-0 after:bottom-0 after:h-[1.5px] after:bg-primary`
+                        : `${isTransparentHeader ? 'text-black hover:text-black/75' : 'text-muted-foreground hover:text-foreground'} after:absolute after:inset-x-0 after:bottom-0 after:h-[1.5px] after:bg-transparent hover:after:bg-primary/50 after:transition-colors`
                     }`}
                   >
                     {item.label}
@@ -465,8 +500,17 @@ export function StorefrontLayout() {
               })}
             </nav>
 
-            {/* Zone 3: Minimal Favorites, Account Dropdown & Gold-Count Shopping Bag */}
-            <div className="justify-self-end flex items-center gap-1.5 lg:gap-2.5">
+            {/* Zone 3: Minimal Search, Favorites, Account Dropdown & Shopping Bag */}
+            <div className="justify-self-end flex items-center gap-1.5 lg:gap-2">
+              <Link
+                to="/koleksiyon"
+                aria-label="Ürün ara"
+                className={`inline-flex items-center justify-center w-10 h-10 rounded-full hover:bg-border/45 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  isTransparentHeader ? 'text-black' : 'text-foreground'
+                }`}
+              >
+                <Search className="w-[20px] h-[20px] stroke-[1.55]" />
+              </Link>
               {authenticated ? <StorefrontNotificationBell /> : null}
               {/* Favorites */}
               <Link
@@ -746,7 +790,8 @@ export function StorefrontLayout() {
             </div>
           </nav>
         )}
-      </header>
+        </header>
+      </div>
 
       {/* Main Content */}
       <main className="flex-1 min-w-0">
@@ -755,7 +800,7 @@ export function StorefrontLayout() {
 
       {/* 8. Corporate Pearl White Footer (Faithful to TARA DIAMOND Reference) */}
       <footer id="musteri-hizmetleri" className="bg-background text-foreground border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-14 sm:py-16">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-8">
             {/* Brand Story */}
             <div className="lg:col-span-3 space-y-3.5">
@@ -976,8 +1021,8 @@ export function StorefrontLayout() {
 
         {/* Bottom Copyright & Legal Bar */}
         <div className="border-t border-border">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-muted-foreground">
-            <span>© {new Date().getFullYear()} TARA DIAMOND. Tüm hakları saklıdır.</span>
+          <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>© {new Date().getFullYear()} TARA DIAMOND · 256-bit SSL Güvenli Ödeme · GIA & HRD Sertifikalı</span>
 
             <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
               {(

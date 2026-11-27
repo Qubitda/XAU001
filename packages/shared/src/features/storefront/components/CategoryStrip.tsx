@@ -33,7 +33,7 @@ const FALLBACK_LABELS: Record<string, string> = {
   SET: 'Set',
   KUPE: 'Küpe',
   KOLYE: 'Kolye',
-  BILEZIK: 'Kelepçe',
+  BILEZIK: 'Bilezik',
   ALYANS: 'Alyans',
   BILEKLIK: 'Bileklik',
 };
@@ -91,39 +91,32 @@ interface CategoryCardItem {
   alt: string;
 }
 
-function EditorialCategoryCard({
-  cat,
-  aspectClass,
-}: {
-  cat: CategoryCardItem;
-  aspectClass: string;
-}) {
+function EditorialCategoryCard({ cat }: { cat: CategoryCardItem }) {
   return (
     <Link
       to={cat.href}
-      className={`group relative ${aspectClass} rounded-[2px] overflow-hidden bg-[#EFECE8] border border-stone-200/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`}
+      className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-[4px]"
     >
-      <img
-        src={cat.imageUrl}
-        alt={cat.alt}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-white/75 via-white/25 to-transparent pointer-events-none"
-      />
-      <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 flex items-end justify-between gap-2">
-        <span
-          className="text-2xl sm:text-3xl leading-none text-stone-900 select-none drop-shadow-[0_1px_2px_rgba(255,255,255,0.9)]"
-          style={{ fontFamily: "'Alex Brush', 'Cormorant Garamond', Georgia, serif" }}
-        >
+      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[4px] bg-card">
+        <img
+          src={cat.imageUrl}
+          alt={cat.alt}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white/75 via-white/35 to-transparent backdrop-blur-md pointer-events-none"
+          style={{
+            maskImage: 'linear-gradient(to top, black 45%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to top, black 45%, transparent 100%)',
+          }}
+        />
+        <div className="relative z-10 mt-auto" />
+        <span className="absolute bottom-3.5 left-3.5 z-10 text-left font-serif text-lg sm:text-xl font-medium tracking-tight text-foreground leading-none">
           {cat.label}
-        </span>
-        <span className="shrink-0 px-3 py-1 bg-stone-200/90 backdrop-blur-xs text-stone-800 text-[10px] font-medium tracking-[0.16em] uppercase transition-colors group-hover:bg-stone-900 group-hover:text-white">
-          İNCELE
         </span>
       </div>
     </Link>
@@ -182,7 +175,7 @@ export function CategoryStrip({ products }: CategoryStripProps) {
 
       return {
         key: opt.code,
-        label: opt.label,
+        label: FALLBACK_LABELS[opt.code] ?? opt.label,
         href: `/koleksiyon?category=${encodeURIComponent(opt.value)}`,
         count: matching.length,
         imageUrl,
@@ -193,39 +186,33 @@ export function CategoryStrip({ products }: CategoryStripProps) {
 
   if (cards.length === 0) return null;
 
-  const topRow = cards.slice(0, 3);
-  const bottomRow = cards.slice(3, 7);
+  const visibleCards = cards.slice(0, 6);
 
   return (
     <section
       aria-labelledby="storefront-categories-heading"
-      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-3 sm:space-y-4"
+      className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 space-y-5 sm:space-y-6"
     >
-      <h2 id="storefront-categories-heading" className="sr-only">
-        Mücevher kategorileri
-      </h2>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        {topRow.map((cat) => (
-          <EditorialCategoryCard key={cat.key} cat={cat} aspectClass="aspect-[4/3] sm:aspect-square" />
-        ))}
+      <div className="flex items-baseline justify-between gap-4">
+        <h2
+          id="storefront-categories-heading"
+          className="font-serif text-2xl sm:text-3xl font-normal text-foreground"
+        >
+          Kategoriler
+        </h2>
+        <Link
+          to="/koleksiyon"
+          className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Tüm Koleksiyon
+        </Link>
       </div>
 
-      {bottomRow.length > 0 && (
-        <div
-          className={`grid grid-cols-2 ${
-            bottomRow.length <= 2
-              ? 'lg:grid-cols-2'
-              : bottomRow.length === 3
-                ? 'lg:grid-cols-3'
-                : 'lg:grid-cols-4'
-          } gap-3 sm:gap-4`}
-        >
-          {bottomRow.map((cat) => (
-            <EditorialCategoryCard key={cat.key} cat={cat} aspectClass="aspect-square" />
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5">
+        {visibleCards.map((cat) => (
+          <EditorialCategoryCard key={cat.key} cat={cat} />
+        ))}
+      </div>
     </section>
   );
 }

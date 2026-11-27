@@ -104,7 +104,7 @@ export function StorefrontPageHeader({
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="text-[32px] sm:text-[40px] font-medium text-foreground leading-[1.1]">
+          <h1 className="font-serif text-[32px] sm:text-[42px] font-normal text-foreground leading-[1.08]">
             {title}
           </h1>
           {subtitle ? (
@@ -209,8 +209,8 @@ export function StorefrontProductCard({
       : 0;
 
   const mediaFrameClass = isCollectionLayout
-    ? 'relative h-[220px] sm:h-[260px] xl:h-[280px] bg-muted rounded-sm overflow-hidden'
-    : 'relative aspect-[4/3] bg-muted overflow-hidden';
+    ? 'relative aspect-square bg-muted rounded-sm overflow-hidden'
+    : 'relative aspect-square bg-muted overflow-hidden';
 
   const articleClass = isCollectionLayout
     ? 'group flex h-full flex-col gap-3'
@@ -390,7 +390,7 @@ export function StorefrontProductCard({
         <button
           type="button"
           onClick={onOpen}
-          className="min-h-[2.75rem] text-left text-lg font-medium leading-snug text-foreground line-clamp-2 transition-colors hover:text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+          className="min-h-[2.5rem] text-left text-[15px] sm:text-base font-medium leading-snug text-foreground line-clamp-2 transition-colors hover:text-[#A58C72] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
         >
           {product.title}
         </button>

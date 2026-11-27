@@ -222,7 +222,7 @@ export function DyoWizardFeatureView({ portalMode = 'b2c' }: DyoWizardFeatureVie
 
   return (
     <div className="bg-background text-foreground min-h-[70vh]">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-6 sm:py-10 space-y-6">
         <StorefrontBreadcrumb
           items={[
             { label: homeLabel, to: homePath },

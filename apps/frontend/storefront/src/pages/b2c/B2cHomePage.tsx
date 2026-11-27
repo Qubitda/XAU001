@@ -86,7 +86,7 @@ export function B2cHomePage() {
       <HeroBannerSlider />
 
       {/* 2. Categories + Featured Collection + New Arrivals & Live Showcase */}
-      <div className="py-8 sm:py-10 lg:py-12 space-y-8 sm:space-y-10">
+      <div className="py-12 sm:py-16 lg:py-20 space-y-16 sm:space-y-20">
         <CategoryStrip products={products} />
 
         <FeaturedAndNewSection

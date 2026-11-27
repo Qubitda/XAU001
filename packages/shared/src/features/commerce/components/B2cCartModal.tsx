@@ -504,14 +504,14 @@ export function B2cCartModal() {
         </dd>
       </div>
 
-      <div className="pt-2.5 mt-2.5 border-t border-border flex items-baseline justify-between gap-3">
+      <div className="pt-3 mt-3 border-t border-[#E9DCCB] flex items-baseline justify-between gap-3">
         <div>
-          <dt className="text-sm font-semibold text-foreground">Ödenecek Toplam</dt>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <dt className="font-serif text-base font-medium text-[#252321]">Ödenecek Toplam</dt>
+          <p className="text-[11px] text-[#252321]/65 mt-0.5">
             KDV dahil ({formatTrNumber(totals.vatIncludedTry, 2)} TL)
           </p>
         </div>
-        <dd className="font-mono text-lg font-semibold text-foreground tabular-nums whitespace-nowrap">
+        <dd className="font-sans text-lg font-semibold text-[#252321] tabular-nums whitespace-nowrap">
           {formatTrNumber(totals.grandTotalTry, 2)} TL
         </dd>
       </div>
@@ -533,24 +533,24 @@ export function B2cCartModal() {
         <DialogContent
           showGlow={false}
           hideCloseButton
-          className="inset-0 left-0 top-0 translate-x-0 translate-y-0 w-full max-w-none h-[100dvh] max-h-[100dvh] rounded-none md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[calc(100%-2rem)] md:max-w-[920px] md:h-auto md:max-h-[88vh] md:rounded-[6px]"
-          innerClassName="p-0 overflow-hidden h-[100dvh] max-h-[100dvh] md:h-auto md:max-h-[88vh] flex flex-col bg-background border-0 md:border md:border-border shadow-2xl"
+          className="inset-0 left-0 top-0 translate-x-0 translate-y-0 w-full max-w-none h-[100dvh] max-h-[100dvh] rounded-none md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[calc(100%-2rem)] md:max-w-[940px] md:h-auto md:max-h-[88vh] md:rounded-[6px]"
+          innerClassName="p-0 overflow-hidden h-[100dvh] max-h-[100dvh] md:h-auto md:max-h-[88vh] flex flex-col bg-[#F8F5EF] text-[#252321] border-0 md:border md:border-[#E9DCCB] shadow-2xl"
         >
           {/* Sticky Top Modal Header */}
-          <header className="shrink-0 bg-card border-b border-border px-3 sm:px-6 py-3 flex items-center justify-between gap-2 min-w-0">
+          <header className="shrink-0 bg-white border-b border-[#E9DCCB] px-4 sm:px-6 py-3.5 flex items-center justify-between gap-2 min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {isCheckoutFlow && step > 1 && (
                 <button
                   type="button"
                   onClick={() => handleStepNavigation((step - 1) as CheckoutStep)}
                   aria-label="Önceki adıma dön"
-                  className="md:hidden inline-flex items-center justify-center w-9 h-9 -ml-1.5 rounded-[4px] text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0"
+                  className="md:hidden inline-flex items-center justify-center w-9 h-9 -ml-1.5 rounded-[4px] text-[#252321] hover:bg-[#F8F5EF] transition-colors cursor-pointer shrink-0"
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </button>
               )}
               <div className="min-w-0">
-                <DialogTitle className="font-serif text-[17px] sm:text-xl font-normal text-foreground truncate leading-tight">
+                <DialogTitle className="font-serif text-[20px] sm:text-[22px] font-normal text-[#252321] truncate leading-tight">
                   {activeTab === 'orders' ? (
                     'Siparişlerim'
                   ) : confirmedOrder ? (
@@ -569,17 +569,17 @@ export function B2cCartModal() {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              <div className="inline-flex rounded-[4px] border border-border bg-muted p-0.5 text-[11px] sm:text-xs">
+              <div className="inline-flex rounded-[4px] border border-[#E9DCCB] bg-[#F8F5EF] p-0.5 text-[11px] sm:text-xs">
                 <button
                   type="button"
                   onClick={() => {
                     setConfirmedOrder(null);
                     setActiveTab('cart');
                   }}
-                  className={`px-2 sm:px-2.5 py-1.5 rounded-[3px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-[3px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
                     activeTab === 'cart'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'bg-[#252321] text-white'
+                      : 'text-[#252321]/70 hover:text-[#252321]'
                   }`}
                 >
                   Sepet ({totalQty})
@@ -587,10 +587,10 @@ export function B2cCartModal() {
                 <button
                   type="button"
                   onClick={() => setActiveTab('orders')}
-                  className={`px-2 sm:px-2.5 py-1.5 rounded-[3px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-[3px] font-medium transition-colors whitespace-nowrap cursor-pointer ${
                     activeTab === 'orders'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'bg-[#252321] text-white'
+                      : 'text-[#252321]/70 hover:text-[#252321]'
                   }`}
                 >
                   <span className="min-[380px]:hidden">Sipariş ({orders.length})</span>
@@ -605,7 +605,7 @@ export function B2cCartModal() {
                   setB2cCartOpen(false);
                 }}
                 aria-label="Sepeti kapat"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-[4px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer shrink-0"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-[4px] text-[#252321]/70 hover:text-[#252321] hover:bg-[#F8F5EF] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B89A68] cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -614,7 +614,7 @@ export function B2cCartModal() {
 
           {/* Stepper + Compact Gold Lock Strip (Checkout Flow Only) */}
           {isCheckoutFlow && (
-            <div className="shrink-0 bg-muted/65 border-b border-border">
+            <div className="shrink-0 bg-white border-b border-[#E9DCCB]">
               <nav
                 aria-label="Sipariş adımları"
                 className="px-4 sm:px-6 py-2.5 flex items-center justify-between gap-2"
@@ -640,10 +640,10 @@ export function B2cCartModal() {
                           <span
                             className={`w-5 h-5 rounded-full inline-flex items-center justify-center text-[11px] font-mono shrink-0 ${
                               isActive
-                                ? 'bg-primary text-primary-foreground'
+                                ? 'bg-[#252321] text-white'
                                 : isCompleted
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-border text-muted-foreground'
+                                  ? 'bg-[#252321] text-white'
+                                  : 'bg-[#F8F5EF] border border-[#E9DCCB] text-[#252321]/65'
                             }`}
                           >
                             {isCompleted ? <Check className="w-3 h-3" /> : item.id}
@@ -655,7 +655,7 @@ export function B2cCartModal() {
                           <div
                             aria-hidden="true"
                             className={`h-px flex-1 mx-2 sm:mx-3 ${
-                              step > item.id ? 'bg-primary/65' : 'bg-[#DCCEB9]'
+                              step > item.id ? 'bg-[#B89A68]' : 'bg-[#E9DCCB]'
                             }`}
                           />
                         )}
@@ -686,12 +686,14 @@ export function B2cCartModal() {
                 )}
               </nav>
 
-              {/* Expired Gold Lock Alert (Prominent only when expired) */}
+              {/* Expired Gold Lock Alert (Pearl White + Anthracite + Subtle Champagne Gold) */}
               {lockExpired && (
-                <div className="px-4 sm:px-6 py-2 bg-primary/[0.07] border-t border-foreground flex flex-wrap items-center justify-between gap-2 text-xs text-foreground">
+                <div className="px-4 sm:px-6 py-2.5 bg-[#F8F5EF] border-t border-[#E9DCCB] flex flex-wrap items-center justify-between gap-2.5 text-xs text-[#252321]">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Clock className="w-3.5 h-3.5 text-foreground shrink-0" />
-                    <span>Altın fiyat kilidi süresi doldu. Güncel kurla devam edin.</span>
+                    <Clock className="w-4 h-4 text-[#B89A68] shrink-0" />
+                    <span className="leading-snug">
+                      Altın fiyat kilidi süresi doldu. Güncel kurla devam edebilmek için fiyatı yenileyin.
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -700,7 +702,7 @@ export function B2cCartModal() {
                       refreshLockMutation.mutate();
                     }}
                     disabled={refreshLockMutation.isPending}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-primary text-primary-foreground text-[11px] font-medium hover:bg-primary transition-colors cursor-pointer whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] bg-[#252321] text-white text-[11px] font-medium hover:bg-[#252321]/90 transition-colors cursor-pointer whitespace-nowrap"
                   >
                     <RefreshCw
                       className={`w-3 h-3 ${refreshLockMutation.isPending ? 'animate-spin' : ''}`}
@@ -1009,11 +1011,11 @@ export function B2cCartModal() {
                   {step === 1 && (
                     <div className="space-y-4">
                       {!authenticated && items.length > 0 && !guestLeadSaved ? (
-                        <div className="rounded-md border border-border bg-muted/40 px-3.5 py-3 space-y-2">
-                          <p className="text-xs font-medium text-foreground">
+                        <div className="rounded-[6px] border border-[#E9DCCB] bg-white px-4 py-3.5 space-y-2.5">
+                          <p className="text-xs font-medium text-[#252321]">
                             Sepetinizi e-posta ile hatırlatalım
                           </p>
-                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          <p className="text-[11px] text-[#252321]/70 leading-relaxed">
                             Çıkmadan önce adresinizi bırakın; sepetiniz kaybolursa nazik bir
                             hatırlatma gönderelim.
                           </p>
@@ -1023,29 +1025,29 @@ export function B2cCartModal() {
                               value={guestLeadEmail}
                               onChange={(e) => setGuestLeadEmail(e.target.value)}
                               placeholder="E-posta adresiniz"
-                              className="flex-1 h-10 px-3 rounded-[4px] border border-input bg-white text-sm text-foreground"
+                              className="flex-1 h-10 px-3 rounded-[4px] border border-[#E9DCCB] bg-[#F8F5EF]/40 text-sm text-[#252321] placeholder:text-[#252321]/45 focus:outline-none focus:border-[#B89A68]"
                             />
                             <button
                               type="button"
                               disabled={guestLeadPending}
                               onClick={() => void handleGuestRecoveryLead()}
-                              className="h-10 px-4 rounded-[4px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50"
+                              className="h-10 px-4 rounded-[4px] bg-[#252321] text-white text-xs font-medium hover:bg-[#252321]/90 disabled:opacity-50 transition-colors cursor-pointer"
                             >
                               {guestLeadPending ? 'Kaydediliyor…' : 'Hatırlat'}
                             </button>
                           </div>
                           {guestLeadError ? (
-                            <p className="text-[11px] text-destructive">{guestLeadError}</p>
+                            <p className="text-[11px] text-[#4A101C]">{guestLeadError}</p>
                           ) : null}
                         </div>
                       ) : null}
                       {!authenticated && guestLeadSaved ? (
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-[11px] text-[#252321]/70">
                           Hatırlatma için e-posta kaydedildi. Sepeti istediğiniz zaman
                           tamamlayabilirsiniz.
                         </p>
                       ) : null}
-                      <div className="divide-y divide-border/80">
+                      <div className="divide-y divide-[#E9DCCB]/75">
                         {items.map((item) => {
                           const matchedProduct = productsByParentSku.get(item.parentSku);
                           const media = resolveProductMedia(
@@ -1063,9 +1065,9 @@ export function B2cCartModal() {
 
                           return (
                             <article key={item.id} className="py-4 first:pt-0 space-y-3">
-                              <div className="flex gap-3 sm:gap-4 items-start">
+                              <div className="flex gap-3.5 sm:gap-4 items-start">
                                 {/* Product Thumbnail */}
-                                <div className="w-16 h-16 sm:w-[76px] sm:h-[76px] rounded-[4px] border border-border bg-muted overflow-hidden shrink-0 flex items-center justify-center">
+                                <div className="w-20 h-20 sm:w-[88px] sm:h-[88px] rounded-[4px] border border-[#E9DCCB]/80 bg-white overflow-hidden shrink-0 flex items-center justify-center">
                                   {media.mainUrl && !imgFailed ? (
                                     <img
                                       src={media.mainUrl}
@@ -1097,10 +1099,10 @@ export function B2cCartModal() {
                                 <div className="flex-1 min-w-0 space-y-1">
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0">
-                                      <h3 className="font-serif text-[16px] font-medium text-foreground leading-snug line-clamp-2">
+                                      <h3 className="font-serif text-[17px] sm:text-[18px] font-medium text-[#252321] leading-snug line-clamp-2">
                                         {item.title}
                                       </h3>
-                                      <div className="font-mono text-[11px] text-muted-foreground mt-0.5 truncate">
+                                      <div className="font-mono text-[11px] text-[#252321]/55 mt-0.5 truncate">
                                         {item.sku}
                                       </div>
                                     </div>
@@ -1114,7 +1116,7 @@ export function B2cCartModal() {
                                           : `${item.title} ürününü kaldır`
                                       }
                                       data-delete="true"
-                                      className="p-1.5 -mr-1.5 -mt-1 text-destructive hover:bg-destructive/10 transition-colors cursor-pointer shrink-0 rounded-md"
+                                      className="p-1.5 -mr-1.5 -mt-1 text-[#252321]/45 hover:text-[#4A101C] hover:bg-[#4A101C]/5 transition-colors cursor-pointer shrink-0 rounded-md"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </button>
@@ -1819,21 +1821,21 @@ export function B2cCartModal() {
                 </div>
 
                 {/* Desktop & Tablet Order Summary Panel (Hidden on Mobile — Mobile uses Sticky Bottom Bar) */}
-                <aside className="hidden md:block lg:col-span-5 lg:sticky lg:top-0 rounded-[6px] border border-border bg-card p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-serif text-lg font-normal text-foreground">Sipariş Özeti</h3>
-                    <span className="text-xs text-muted-foreground">{totalQty} ürün</span>
+                <aside className="hidden md:block lg:col-span-5 lg:sticky lg:top-0 rounded-[6px] border border-[#E9DCCB] bg-white p-5 sm:p-6 space-y-4">
+                  <div className="flex items-center justify-between border-b border-[#E9DCCB]/70 pb-3">
+                    <h3 className="font-serif text-xl font-normal text-[#252321]">Sipariş Özeti</h3>
+                    <span className="text-xs text-[#252321]/65">{totalQty} ürün</span>
                   </div>
 
                   {/* Mini item preview on Steps 2 & 3 */}
                   {step > 1 && (
-                    <div className="pb-3 border-b border-border/80 space-y-1.5 text-xs">
+                    <div className="pb-3 border-b border-[#E9DCCB]/70 space-y-1.5 text-xs">
                       {items.map((item) => (
                         <div key={item.id} className="flex items-baseline justify-between gap-2">
-                          <span className="text-muted-foreground truncate">
+                          <span className="text-[#252321]/75 truncate">
                             {item.qty}× {item.title}
                           </span>
-                          <span className="font-mono tabular-nums text-foreground shrink-0">
+                          <span className="font-sans font-medium tabular-nums text-[#252321] shrink-0">
                             {formatTrNumber(item.unitFinalPriceTry * item.qty, 2)} TL
                           </span>
                         </div>
@@ -1846,7 +1848,7 @@ export function B2cCartModal() {
                   <div className="space-y-2 pt-1">
                     <Button
                       type="button"
-                      className="w-full h-11 text-sm font-medium rounded-[4px]"
+                      className="w-full h-11 text-sm font-medium rounded-[4px] bg-[#252321] text-white hover:bg-[#252321]/90"
                       disabled={checkoutPending || (step === 3 && lockExpired)}
                       onClick={handlePrimaryAction}
                     >
@@ -1872,10 +1874,10 @@ export function B2cCartModal() {
 
           {/* Mobile Sticky Bottom Checkout Bar (< 768px Only) */}
           {isCheckoutFlow && (
-            <div className="md:hidden shrink-0 border-t border-border bg-card px-3 min-[360px]:px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
+            <div className="md:hidden shrink-0 border-t border-[#E9DCCB] bg-white px-3 min-[360px]:px-4 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2.5">
               {/* Collapsible Order Summary Accordion */}
               {mobileSummaryOpen && (
-                <div className="pb-2.5 border-b border-border">{renderSummaryLines()}</div>
+                <div className="pb-2.5 border-b border-[#E9DCCB]">{renderSummaryLines()}</div>
               )}
 
               <div className="flex items-center justify-between gap-2">
@@ -1901,7 +1903,7 @@ export function B2cCartModal() {
 
                 <Button
                   type="button"
-                  className="min-h-[44px] px-3 min-[360px]:px-4 text-xs min-[360px]:text-sm font-medium rounded-[4px] shrink-0"
+                  className="min-h-[44px] px-3 min-[360px]:px-4 text-xs min-[360px]:text-sm font-medium rounded-[4px] bg-[#252321] text-white hover:bg-[#252321]/90 shrink-0"
                   disabled={checkoutPending || (step === 3 && lockExpired)}
                   onClick={handlePrimaryAction}
                 >

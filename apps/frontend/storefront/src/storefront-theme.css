@@ -1,0 +1,58 @@
+/**
+ * TARA DIAMOND Storefront — Official Global Brand Identity & Design System
+ * Scoped to @taragold/storefront so B2B/OPS portals keep their zinc grayscale theme.
+ *
+ * Official Brand Colors:
+ * - İnci beyazı:      #F8F5EF
+ * - Şampanya fildişi: #E9DCCB
+ * - Antrasit:         #252321
+ * - Şampanya altını:  #B89A68
+ * - Derin bordo:      #4A101C
+ */
+:root {
+  color-scheme: light;
+
+  /* Brand Palette Primitives */
+  --tara-pearl: #F8F5EF;
+  --tara-champagne-ivory: #E9DCCB;
+  --tara-anthracite: #252321;
+  --tara-champagne-gold: #B89A68;
+  --tara-burgundy: #4A101C;
+  --tara-champagne: #E9DCCB;
+  --tara-muted-gold: #B89A68;
+
+  /* Semantic Surface & Text Tokens */
+  --background: #F8F5EF;
+  --foreground: #252321;
+  --card: #FFFFFF;
+  --card-foreground: #252321;
+  --popover: #FFFFFF;
+  --popover-foreground: #252321;
+  --primary: #252321;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F2ECE1;
+  --secondary-foreground: #252321;
+  --muted: #F2ECE1;
+  --muted-foreground: #665F58;
+  --accent: #EFE6D8;
+  --accent-foreground: #252321;
+  --destructive: #4A101C;
+  --destructive-foreground: #FFFFFF;
+  --border: #E9DCCB;
+  --input: #E9DCCB;
+  --ring: #B89A68;
+
+  /* Typography */
+  --font-sans: "Manrope", "Geist Variable", system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+.font-serif {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}

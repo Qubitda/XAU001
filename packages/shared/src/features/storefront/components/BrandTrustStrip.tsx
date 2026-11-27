@@ -35,7 +35,7 @@ interface BrandTrustStripProps {
 export function BrandTrustStrip(_props: BrandTrustStripProps = {}) {
   return (
     <section aria-label="TARA DIAMOND güvenceleri" className="border-y border-border bg-card">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7 sm:py-8">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-8 sm:py-10">
         <div className="grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-y-5 gap-x-6 lg:divide-x lg:divide-border">
           {TRUST_PILLARS.map((item, idx) => {
             const Icon = item.icon;

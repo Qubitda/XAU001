@@ -102,7 +102,7 @@ export function FavoritesFeatureView({ portalMode }: FavoritesFeatureViewProps =
   // B2C Storefront — TARA DIAMOND Design System
   if (effectiveRole === 'b2c') {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-8 sm:py-10 space-y-8">
         <StorefrontPageHeader
           eyebrow="Kişisel Seçki"
           title={`Favorilerim (${favoriteItems.length})`}
@@ -203,7 +203,7 @@ export function FavoritesFeatureView({ portalMode }: FavoritesFeatureViewProps =
       className={
         isB2bPortal
           ? 'space-y-6'
-          : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8'
+          : 'max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 py-10 space-y-8'
       }
     >
       {isB2bPortal ? (

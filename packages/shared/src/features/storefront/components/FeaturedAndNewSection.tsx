@@ -79,15 +79,15 @@ export function FeaturedAndNewSection({
   };
 
   return (
-    <div className="space-y-12 sm:space-y-16">
+    <div className="space-y-16 sm:space-y-20">
       {/* Dual Editorial Row: Featured Collection Left | New Arrivals Preview Right */}
       <section
         aria-label="Öne çıkan koleksiyon ve yeni gelenler"
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+        className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12"
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-stretch">
-          {/* Left Card: Öne Çıkan Koleksiyon (Timeless Collection) */}
-          <div className="lg:col-span-6 relative rounded-[6px] overflow-hidden bg-muted border border-border min-h-[210px] sm:min-h-[230px] flex items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
+          {/* Left Card: Öne Çıkan Koleksiyon (Timeless Collection — Dominant Editorial Block) */}
+          <div className="lg:col-span-7 relative rounded-[6px] overflow-hidden bg-card border border-border min-h-[260px] sm:min-h-[300px] flex items-center">
             <img
               src={featuredBannerImage}
               alt="TARA DIAMOND Timeless Collection öne çıkan pırlanta yüzük"
@@ -101,7 +101,7 @@ export function FeaturedAndNewSection({
               className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-background/15"
             />
 
-            <div className="relative z-10 p-6 sm:p-8 max-w-[68%] sm:max-w-[60%] space-y-2.5">
+            <div className="relative z-10 p-6 sm:p-8 max-w-[75%] sm:max-w-[58%] space-y-2.5">
               <p className="text-xs font-medium text-muted-foreground">Öne Çıkan Koleksiyon</p>
               <h2 className="font-serif text-[28px] sm:text-[34px] font-normal text-foreground leading-[1.08]">
                 Timeless Collection
@@ -122,7 +122,7 @@ export function FeaturedAndNewSection({
           </div>
 
           {/* Right Card: Yeni Gelenler Preview Strip */}
-          <div className="lg:col-span-6 rounded-[6px] bg-muted border border-border p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+          <div className="lg:col-span-5 rounded-[6px] bg-card border border-border p-6 sm:p-8 flex flex-col justify-between gap-6">
             <div className="space-y-2 sm:max-w-[190px] shrink-0">
               <h2 className="font-serif text-[26px] sm:text-[28px] font-normal text-foreground leading-tight">
                 Yeni Gelenler
@@ -212,7 +212,7 @@ export function FeaturedAndNewSection({
       {/* Live API Product Showcase Section */}
       <section
         aria-label="Seçkin ürünler"
-        className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8"
+        className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 space-y-6 sm:space-y-8"
       >
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border pb-4">
           <div className="space-y-1">
@@ -302,7 +302,7 @@ export function FeaturedAndNewSection({
           </div>
         ) : (
           /* Real Catalog Product Cards */
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-6">
             {showcaseItems.map((entry) => {
               const activeColor =
                 previewColors[entry.product.parentSku] ?? entry.product.metalColor;
