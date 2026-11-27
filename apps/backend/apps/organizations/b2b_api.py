@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 from apps.audit.services import record_audit
 from apps.authorization.permissions import IsB2bOrganizationMember
 from apps.common.responses import envelope_response
-from apps.organizations.models import Membership, Organization
+from apps.organizations.models import Organization, OrganizationMembership as Membership
 from apps.organizations.selectors import resolve_tenant_context
 from config.exceptions import DomainError
 
