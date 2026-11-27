@@ -87,7 +87,7 @@ def taragold_exception_handler(exc: Exception, context: dict[str, Any]) -> Respo
         "code": code_map.get(response.status_code, "HTTP_ERROR"),
         "message": message,
     }
-    if details and settings.DEBUG:
+    if details:
         payload["details"] = details
     elif details and response.status_code < 500:
         # Validation details are OK to return; strip unexpected nested dumps in prod.
