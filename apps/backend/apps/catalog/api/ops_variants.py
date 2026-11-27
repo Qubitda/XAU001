@@ -92,9 +92,9 @@ def serialize_ops_media(m: ProductMedia) -> dict:
 class OpsVariantCreateSerializer(serializers.Serializer):
     parentSku = serializers.CharField(max_length=32)
     sku = serializers.CharField(max_length=64)
-    purityCode = serializers.ChoiceField(choices=["8K", "14K", "18K", "22K", "925"])
-    metalColor = serializers.ChoiceField(choices=["Beyaz", "Sarı", "Rose"])
-    size = serializers.IntegerField(min_value=6, max_value=70, default=14)
+    purityCode = serializers.CharField(max_length=16)
+    metalColor = serializers.CharField(max_length=32)
+    size = serializers.IntegerField(min_value=0, max_value=70, default=14)
     centerStoneCarat = serializers.DecimalField(max_digits=6, decimal_places=3, min_value=Decimal("0"), default=Decimal("0.000"))
     grossWeightGram = serializers.DecimalField(max_digits=10, decimal_places=4, min_value=Decimal("0.01"))
     initialStockQty = serializers.IntegerField(min_value=0, default=0)
@@ -104,9 +104,9 @@ class OpsVariantCreateSerializer(serializers.Serializer):
 
 class OpsVariantUpdateSerializer(serializers.Serializer):
     sku = serializers.CharField(max_length=64, required=False)
-    purityCode = serializers.ChoiceField(choices=["8K", "14K", "18K", "22K", "925"], required=False)
-    metalColor = serializers.ChoiceField(choices=["Beyaz", "Sarı", "Rose"], required=False)
-    size = serializers.IntegerField(min_value=6, max_value=70, required=False)
+    purityCode = serializers.CharField(max_length=16, required=False)
+    metalColor = serializers.CharField(max_length=32, required=False)
+    size = serializers.IntegerField(min_value=0, max_value=70, required=False)
     centerStoneCarat = serializers.DecimalField(max_digits=6, decimal_places=3, min_value=Decimal("0"), required=False)
     grossWeightGram = serializers.DecimalField(max_digits=10, decimal_places=4, min_value=Decimal("0.01"), required=False)
     isDefault = serializers.BooleanField(required=False)
@@ -138,7 +138,7 @@ class OpsStoneLineUpdateSerializer(serializers.Serializer):
 
 class OpsMediaCreateSerializer(serializers.Serializer):
     parentSku = serializers.CharField(max_length=32)
-    metalColor = serializers.ChoiceField(choices=["Beyaz", "Sarı", "Rose"], default="Beyaz")
+    metalColor = serializers.CharField(max_length=32, default="Beyaz")
     role = serializers.ChoiceField(choices=ProductMedia.MediaRole.values, default=ProductMedia.MediaRole.GALLERY_MAIN)
     url = serializers.URLField(max_length=500)
     sortOrder = serializers.IntegerField(min_value=1, max_value=999, default=1)

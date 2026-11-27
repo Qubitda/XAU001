@@ -22,6 +22,32 @@ class DomainError(APIException):
         super().__init__(detail=message, code=code)
 
 
+def _flatten_details(detail: dict[str, Any]) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for k, v in detail.items():
+        if isinstance(v, list):
+            out[str(k)] = [str(i) for i in v]
+        elif isinstance(v, dict):
+            for sub_k, sub_v in _flatten_details(v).items():
+                out[f"{k}.{sub_k}"] = sub_v
+        else:
+            out[str(k)] = [str(v)]
+    return out
+
+
+def _format_validation_summary(details: dict[str, list[str]]) -> str:
+    parts: list[str] = []
+    for field, msgs in details.items():
+        msg_text = ", ".join(str(m) for m in msgs if m)
+        if not msg_text:
+            continue
+        if field in ("non_field_errors", "non_field", "__all__"):
+            parts.append(msg_text)
+        else:
+            parts.append(f"{field}: {msg_text}")
+    return " | ".join(parts[:3]) if parts else "Girilen veriler doğrulanamadı."
+
+
 def taragold_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
     if isinstance(exc, DomainError):
         return Response(
@@ -30,11 +56,12 @@ def taragold_exception_handler(exc: Exception, context: dict[str, Any]) -> Respo
         )
 
     if isinstance(exc, DjangoValidationError):
-        details = exc.message_dict if hasattr(exc, "message_dict") else {"non_field": exc.messages}
+        raw_details = exc.message_dict if hasattr(exc, "message_dict") else {"non_field": exc.messages}
+        details = _flatten_details(raw_details)
         return Response(
             {
                 "code": "VALIDATION_ERROR",
-                "message": "Girilen veriler doğrulanamadı.",
+                "message": _format_validation_summary(details),
                 "details": details,
             },
             status=status.HTTP_400_BAD_REQUEST,
@@ -69,8 +96,8 @@ def taragold_exception_handler(exc: Exception, context: dict[str, Any]) -> Respo
         message = str(detail["detail"])
         details = None
     elif isinstance(detail, dict):
-        message = "İstek doğrulaması başarısız oldu."
-        details = {k: [str(v)] if not isinstance(v, list) else [str(i) for i in v] for k, v in detail.items()}
+        details = _flatten_details(detail)
+        message = _format_validation_summary(details)
     else:
         message = str(detail)
         details = None

@@ -30,7 +30,7 @@ class BuyerQuoteRequestSerializer(serializers.Serializer):
     purityCode = serializers.ChoiceField(choices=["8K", "14K", "18K", "22K", "925"], required=False)
     metalColor = serializers.ChoiceField(choices=["Beyaz", "Sarı", "Rose"], required=False)
     channel = serializers.ChoiceField(choices=["B2B", "B2B_API", "B2C_API", "B2C"])
-    size = serializers.IntegerField(min_value=6, max_value=70, required=False)
+    size = serializers.IntegerField(min_value=0, max_value=70, required=False)
 
     def validate(self, attrs):
         if not attrs.get("parentSku") and not attrs.get("variantId") and not attrs.get("variantSku"):

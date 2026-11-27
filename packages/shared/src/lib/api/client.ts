@@ -10,7 +10,16 @@ export class ApiClientError extends Error {
   details?: Record<string, string[]>;
 
   constructor(status: number, payload: ApiErrorPayload) {
-    super(payload.message);
+    const detailSummary = payload.details
+      ? Object.entries(payload.details)
+          .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : String(msgs)}`)
+          .join(' | ')
+      : '';
+    const msg =
+      detailSummary && (!payload.message || payload.message.includes('doğrulaması başarısız'))
+        ? detailSummary
+        : payload.message || detailSummary || `İstek başarısız oldu (${status})`;
+    super(msg);
     this.name = 'ApiClientError';
     this.status = status;
     this.code = payload.code;

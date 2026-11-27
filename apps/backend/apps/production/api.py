@@ -41,13 +41,13 @@ class OpsWorkOrderCreateSerializer(serializers.Serializer):
     sourceOrderNo = serializers.CharField(max_length=40)
     organizationId = serializers.UUIDField(required=False, allow_null=True)
     sku = serializers.CharField(max_length=64)
-    size = serializers.IntegerField(min_value=6, max_value=70, default=14)
+    size = serializers.IntegerField(min_value=0, max_value=70, default=14)
     quantity = serializers.IntegerField(min_value=1, max_value=1000, default=1)
     engravingOrStampNote = serializers.CharField(max_length=120, required=False, allow_blank=True, default="")
 
 
 class OpsWorkOrderUpdateSerializer(serializers.Serializer):
-    size = serializers.IntegerField(min_value=6, max_value=70, required=False)
+    size = serializers.IntegerField(min_value=0, max_value=70, required=False)
     quantity = serializers.IntegerField(min_value=1, max_value=1000, required=False)
     engravingOrStampNote = serializers.CharField(max_length=120, required=False, allow_blank=True)
 
