@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import ringFallbackImg from '../../../assets/images/se009_yellow_main_1795533192654.jpg';
 import setFallbackImg from '../../../assets/images/se009_rose_main_1795533193180.jpg';
 import necklaceFallbackImg from '../../../assets/images/kl022_necklace_main_1795533193295.jpg';
@@ -14,19 +15,10 @@ import {
   usePublicDefinitionOptions,
 } from '../../definitions/hooks/useDefinitionsQuery';
 import {
-  metaFlag,
+  LEGACY_STOREFRONT_CATEGORY_CODES,
   metaString,
+  pickStorefrontCategories,
 } from '../../definitions/storefrontCategories';
-
-const EDITORIAL_MOSAIC_ORDER = [
-  'YUZUK',
-  'SET',
-  'KUPE',
-  'KOLYE',
-  'BILEZIK',
-  'ALYANS',
-  'BILEKLIK',
-] as const;
 
 const FALLBACK_LABELS: Record<string, string> = {
   YUZUK: 'Yüzük',
@@ -95,30 +87,27 @@ function EditorialCategoryCard({ cat }: { cat: CategoryCardItem }) {
   return (
     <Link
       to={cat.href}
-      className="group block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-[4px]"
+      className="group relative block aspect-[16/9] w-full overflow-hidden rounded-[6px] bg-card border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
-      <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[4px] bg-card">
-        <img
-          src={cat.imageUrl}
-          alt={cat.alt}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-        />
-        <div
+      <img
+        src={cat.imageUrl}
+        alt={cat.alt}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+      />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-gradient-to-tr from-white/85 via-white/25 via-40% to-transparent pointer-events-none"
+      />
+      <span className="absolute bottom-3 left-3.5 z-10 inline-flex items-center gap-1.5 font-sans text-[13px] sm:text-sm font-medium text-foreground leading-none">
+        <span>{cat.label}</span>
+        <ArrowRight
+          className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-0.5"
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white/75 via-white/35 to-transparent backdrop-blur-md pointer-events-none"
-          style={{
-            maskImage: 'linear-gradient(to top, black 45%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to top, black 45%, transparent 100%)',
-          }}
         />
-        <div className="relative z-10 mt-auto" />
-        <span className="absolute bottom-3.5 left-3.5 z-10 text-left font-serif text-lg sm:text-xl font-medium tracking-tight text-foreground leading-none">
-          {cat.label}
-        </span>
-      </div>
+      </span>
     </Link>
   );
 }
@@ -128,7 +117,7 @@ export function CategoryStrip({ products }: CategoryStripProps) {
 
   const cards = useMemo<CategoryCardItem[]>(() => {
     if (options.length === 0) {
-      return EDITORIAL_MOSAIC_ORDER.map((code) => {
+      return LEGACY_STOREFRONT_CATEGORY_CODES.map((code) => {
         const fb = FALLBACK_BY_CODE[code];
         return {
           key: code,
@@ -141,17 +130,7 @@ export function CategoryStrip({ products }: CategoryStripProps) {
       });
     }
 
-    const flagged = options.filter((o) => metaFlag(o.meta, 'showOnStorefront') === true);
-    const orderedCodes = new Map<string, typeof options[number]>();
-    for (const code of EDITORIAL_MOSAIC_ORDER) {
-      const found = options.find((o) => o.code === code);
-      if (found) orderedCodes.set(code, found);
-    }
-    for (const opt of flagged) {
-      if (!orderedCodes.has(opt.code)) orderedCodes.set(opt.code, opt);
-    }
-
-    const selected = Array.from(orderedCodes.values()).slice(0, 7);
+    const selected = pickStorefrontCategories(options);
 
     return selected.map((opt) => {
       const matching = products.filter((p) =>
@@ -175,7 +154,7 @@ export function CategoryStrip({ products }: CategoryStripProps) {
 
       return {
         key: opt.code,
-        label: FALLBACK_LABELS[opt.code] ?? opt.label,
+        label: opt.label || FALLBACK_LABELS[opt.code] || opt.code,
         href: `/koleksiyon?category=${encodeURIComponent(opt.value)}`,
         count: matching.length,
         imageUrl,
@@ -186,30 +165,17 @@ export function CategoryStrip({ products }: CategoryStripProps) {
 
   if (cards.length === 0) return null;
 
-  const visibleCards = cards.slice(0, 6);
-
   return (
     <section
       aria-labelledby="storefront-categories-heading"
-      className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-12 space-y-5 sm:space-y-6"
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
     >
-      <div className="flex items-baseline justify-between gap-4">
-        <h2
-          id="storefront-categories-heading"
-          className="font-serif text-2xl sm:text-3xl font-normal text-foreground"
-        >
-          Kategoriler
-        </h2>
-        <Link
-          to="/koleksiyon"
-          className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Tüm Koleksiyon
-        </Link>
-      </div>
+      <h2 id="storefront-categories-heading" className="sr-only">
+        Mücevher kategorileri
+      </h2>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-5">
-        {visibleCards.map((cat) => (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {cards.map((cat) => (
           <EditorialCategoryCard key={cat.key} cat={cat} />
         ))}
       </div>

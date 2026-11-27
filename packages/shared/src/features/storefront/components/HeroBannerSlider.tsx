@@ -7,7 +7,7 @@ export function HeroBannerSlider() {
   return (
     <section
       aria-label="Öne çıkan kampanya"
-      className="relative w-full overflow-hidden bg-muted border-b border-border"
+      className="relative w-full overflow-hidden bg-background"
     >
       <div className="relative min-h-[500px] sm:min-h-[560px] lg:min-h-[640px] xl:min-h-[680px] flex items-center">
         {/* Background Campaign Video */}
@@ -22,10 +22,16 @@ export function HeroBannerSlider() {
           className="absolute inset-0 w-full h-full object-cover object-[72%_22%] sm:object-[68%_24%] lg:object-[62%_25%]"
         />
 
-        {/* Localized Left-Edge Scrim — keeps right/center video 100% clear */}
+        {/* Localized Left-Edge Scrim — keeps right half of video clear */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/75 via-white/25 via-35% to-transparent to-55% sm:bg-gradient-to-r sm:from-white/80 sm:via-white/35 sm:via-22% sm:to-transparent sm:to-42%"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/85 via-background/45 via-38% to-transparent to-62% sm:bg-gradient-to-r sm:from-background/92 sm:via-background/55 sm:via-28% sm:to-transparent sm:to-50%"
+        />
+
+        {/* Soft Bottom Feather — seamless transition into page background without a hard border */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-20 sm:h-28 bg-gradient-to-t from-background via-background/55 to-transparent"
         />
 
         {/* Hero Copy Overlay */}

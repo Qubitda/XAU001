@@ -11,7 +11,6 @@ import {
   type ResolvedProductMedia,
 } from '../../../data/productMedia';
 import { JewelryIllustration } from '../../../components/JewelryIllustration';
-import { LuxuryMerchRibbon } from '../../../components/LuxuryMerchRibbon';
 import { formatTrNumber } from '../../../utils/pricingEngine';
 import { cn } from '../../../lib/utils';
 
@@ -171,11 +170,11 @@ export function StorefrontProductCard({
   activeColor,
   isFavorite = false,
   isAdded = false,
-  showColorSwatches = false,
+  showColorSwatches: _showColorSwatches = false,
   showQuickAdd = true,
   variant = 'default',
   onOpen,
-  onSelectColor,
+  onSelectColor: _onSelectColor,
   onToggleFavorite,
   onQuickAdd,
 }: StorefrontProductCardProps) {
@@ -198,15 +197,6 @@ export function StorefrontProductCard({
   const isOutOfStock = product.stockStatus === 'Tükendi';
   const hasDiscount = metrics.ledger.hasB2cChannel && metrics.discountAmountTry > 0;
   const isCollectionLayout = variant === 'collection';
-  const variantTotal =
-    product.variants && product.variants.length > 0
-      ? product.variants.length
-      : product.availableColors.length;
-
-  const activeDiscountPct =
-    metrics.ledger.hasB2cChannel && metrics.discountAmountTry > 0
-      ? metrics.ledger.effectiveB2cDiscountPct
-      : 0;
 
   const mediaFrameClass = isCollectionLayout
     ? 'relative aspect-square bg-muted rounded-sm overflow-hidden'
@@ -215,56 +205,6 @@ export function StorefrontProductCard({
   const articleClass = isCollectionLayout
     ? 'group flex h-full flex-col gap-3'
     : 'group bg-card border border-border rounded-md overflow-hidden flex h-full flex-col hover:border-ring transition-colors';
-
-  const collectionMeta = `${product.purityCode} ${displayColor}${
-    metrics.totalStoneCarat > 0 ? ` · ${formatTrNumber(metrics.totalStoneCarat, 2)} ct` : ''
-  }`;
-
-  const stockStatusClass =
-    product.stockStatus === 'Stokta'
-      ? 'text-foreground'
-      : product.stockStatus === 'Tükendi'
-        ? 'text-destructive'
-        : 'text-muted-foreground';
-
-  const swatches =
-    showColorSwatches && onSelectColor && product.availableColors.length > 0 ? (
-      <div className={isCollectionLayout ? 'flex items-center gap-2' : 'pt-2 flex items-center gap-2'}>
-        {product.availableColors.slice(0, 3).map((color) => {
-          const dotBg =
-            color === 'Beyaz'
-              ? 'bg-gradient-to-br from-[#F4F3F1] to-[#CFCBC4]'
-              : color === 'Sarı'
-                ? 'bg-gradient-to-br from-[#F4DF9B] to-[#C89D3C]'
-                : 'bg-gradient-to-br from-[#F1C7B8] to-[#BF7E68]';
-          const isCurrent = displayColor === color;
-          return (
-            <button
-              key={color}
-              type="button"
-              aria-label={`${product.title} — ${color} Altın önizle`}
-              aria-pressed={isCurrent}
-              onClick={(e) => {
-                e.stopPropagation();
-                setImgFailed(false);
-                setHoverFailed(false);
-                onSelectColor(color);
-              }}
-              className={cn(
-                'inline-flex items-center justify-center min-w-6 min-h-6 w-6 h-6 rounded-full border transition-transform cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                dotBg,
-                isCurrent
-                  ? 'border-foreground scale-110 ring-2 ring-ring/40'
-                  : 'border-border hover:scale-105'
-              )}
-            />
-          );
-        })}
-        {!isCollectionLayout ? (
-          <span className="text-xs text-muted-foreground ml-0.5">{displayColor}</span>
-        ) : null}
-      </div>
-    ) : null;
 
   const mediaImages = !imgFailed && resolvedMedia.mainUrl ? (
     <>
@@ -342,11 +282,6 @@ export function StorefrontProductCard({
           aria-label={`${product.title} — ${displayColor} Altın ürün detayını aç`}
           className="absolute inset-0 z-10 block w-full h-full p-0 m-0 border-0 bg-transparent cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
-          <LuxuryMerchRibbon
-            discountPct={activeDiscountPct}
-            isNewCollection={false}
-            size="card"
-          />
           {mediaImages}
         </button>
 
@@ -375,18 +310,6 @@ export function StorefrontProductCard({
           isCollectionLayout ? 'gap-2' : 'p-4 pb-0 gap-1.5'
         )}
       >
-        {!isCollectionLayout ? (
-          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span className="truncate">
-              {product.subCategory || product.category}
-              {product.certificateAgency ? ` · ${product.certificateAgency}` : ''}
-            </span>
-            <span className={cn('shrink-0 font-medium', stockStatusClass)}>
-              {product.stockStatus}
-            </span>
-          </div>
-        ) : null}
-
         <button
           type="button"
           onClick={onOpen}
@@ -394,34 +317,6 @@ export function StorefrontProductCard({
         >
           {product.title}
         </button>
-
-        <p className="min-h-[1.1rem] text-xs text-muted-foreground tabular-nums leading-relaxed">
-          {isCollectionLayout ? (
-            collectionMeta
-          ) : (
-            <>
-              <span>
-                {product.purityCode} {displayColor} Altın
-              </span>
-              {metrics.totalStoneCarat > 0 ? (
-                <>
-                  <span className="mx-1 text-border" aria-hidden="true">
-                    ·
-                  </span>
-                  <span>{formatTrNumber(metrics.totalStoneCarat, 2)} ct</span>
-                </>
-              ) : null}
-              {variantTotal > 1 && !showColorSwatches ? (
-                <>
-                  <span className="mx-1 text-border" aria-hidden="true">
-                    ·
-                  </span>
-                  <span>{variantTotal} seçenek</span>
-                </>
-              ) : null}
-            </>
-          )}
-        </p>
 
         {isCollectionLayout ? (
           <div className="min-h-[2.5rem] tabular-nums space-y-0.5">
@@ -448,12 +343,6 @@ export function StorefrontProductCard({
         ) : null}
 
         <div className="mt-auto flex flex-col gap-2 pt-2">
-          <div className="min-h-[1.25rem]">
-            {showColorSwatches && onSelectColor && product.availableColors.length > 1
-              ? swatches
-              : null}
-          </div>
-
           {isCollectionLayout ? (
             quickAddButton
           ) : (

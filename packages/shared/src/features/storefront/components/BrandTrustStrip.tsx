@@ -1,29 +1,29 @@
-import { Award, Gem, Truck, TrendingUp } from 'lucide-react';
+import { Award, Gem, Gift, ShieldCheck } from 'lucide-react';
 
 const TRUST_PILLARS = [
   {
-    id: 'certificate',
+    id: 'authenticity',
     icon: Award,
-    title: 'GIA / HRD Sertifika',
-    subtitle: 'Bağımsız laboratuvar doğrulaması',
+    title: 'Orijinallik',
+    subtitle: 'Ürün Sertifikası',
+  },
+  {
+    id: 'secure-shopping',
+    icon: ShieldCheck,
+    title: 'Güvenli Alışveriş',
+    subtitle: 'SSL Güvenlik',
   },
   {
     id: 'craftsmanship',
     icon: Gem,
-    title: 'Atölye İşçiliği',
-    subtitle: 'Usta zanaat ve ömür boyu bakım',
+    title: 'Kaliteli İşçilik',
+    subtitle: 'Usta Zanaat',
   },
   {
-    id: 'live-rate',
-    icon: TrendingUp,
-    title: 'Canlı Altın Kur',
-    subtitle: 'Anlık maden fiyatıyla hesaplama',
-  },
-  {
-    id: 'shipping',
-    icon: Truck,
-    title: 'Ücretsiz Kargo',
-    subtitle: 'Sigortalı değerli kurye teslimatı',
+    id: 'packaging',
+    icon: Gift,
+    title: 'Özel Ambalaj',
+    subtitle: 'Marka Kutusu',
   },
 ] as const;
 
