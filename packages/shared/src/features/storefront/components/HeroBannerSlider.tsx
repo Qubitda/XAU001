@@ -28,10 +28,14 @@ export function HeroBannerSlider() {
           className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background/85 via-background/45 via-38% to-transparent to-62% sm:bg-gradient-to-r sm:from-background/92 sm:via-background/55 sm:via-28% sm:to-transparent sm:to-50%"
         />
 
-        {/* Soft Bottom Feather — seamless transition into page background without a hard border */}
+        {/* Soft Bottom Feather — wide, multi-stop smooth fade with zero visible edge */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-20 sm:h-28 bg-gradient-to-t from-background via-background/55 to-transparent"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-44 sm:h-60"
+          style={{
+            background:
+              'linear-gradient(to top, var(--background) 0%, color-mix(in srgb, var(--background) 78%, transparent) 24%, color-mix(in srgb, var(--background) 38%, transparent) 55%, color-mix(in srgb, var(--background) 10%, transparent) 80%, transparent 100%)',
+          }}
         />
 
         {/* Hero Copy Overlay */}
