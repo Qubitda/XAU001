@@ -1,12 +1,12 @@
 """B2B dealer catalog product endpoints."""
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from apps.authorization.permissions import IsB2bOrganizationMember
 from apps.common.responses import apply_safe_ordering, envelope_response, paginated_envelope_response
 from apps.market.services import get_current_rate_snapshot
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 from apps.pricing.models import PricingRecipe
 from config.exceptions import DomainError
 from apps.catalog.models import ProductModel
@@ -31,13 +31,15 @@ class B2bProductListView(APIView):
             PricingRecipe.objects.filter(product=OuterRef("pk"), status=PricingRecipe.Status.PUBLISHED)
         )
         # B2B sees central platform catalog + own organization's private catalog (ACTIVE + channel)
-        qs = _channel_filter(
+        qs = scope_queryset_to_organization(
             _products_queryset()
             .filter(catalog_status=ProductModel.CatalogStatus.ACTIVE)
-            .filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
             .filter(has_published),
-            channel,
+            ctx,
+            org_field="owner_organization",
+            include_shared=True,
         )
+        qs = _channel_filter(qs, channel)
         qs = _apply_filters(qs, request)
         qs = apply_safe_ordering(qs, request, allowed_fields=CATALOG_ORDER_FIELDS, default="-created_at")
         return paginated_envelope_response(
@@ -58,12 +60,15 @@ class B2bProductDetailView(APIView):
         channel = "B2B_API" if getattr(request, "api_key", None) is not None else "B2B"
         product = (
             _channel_filter(
-                _products_queryset()
-                .filter(
-                    catalog_status=ProductModel.CatalogStatus.ACTIVE,
-                )
-                .filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
-                .filter(parent_sku=parent_sku),
+                scope_queryset_to_organization(
+                    _products_queryset().filter(
+                        catalog_status=ProductModel.CatalogStatus.ACTIVE,
+                        parent_sku=parent_sku,
+                    ),
+                    ctx,
+                    org_field="owner_organization",
+                    include_shared=True,
+                ),
                 channel,
             )
             .first()
