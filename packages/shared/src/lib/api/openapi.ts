@@ -26,6 +26,7 @@ export type OpenApiEndpointPath = keyof GeneratedOpenApiPaths;
 export type PortalCapability =
   | 'catalog:read'
   | 'catalog:write'
+  | 'catalog:publish'
   | 'catalog:delete'
   | 'pricing:read'
   | 'pricing:edit'

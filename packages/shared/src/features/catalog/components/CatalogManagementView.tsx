@@ -352,42 +352,44 @@ export function CatalogManagementView() {
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-0.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className={
-                            isPublished
-                              ? 'h-8 w-8 text-amber-600 hover:text-amber-700'
-                              : 'h-8 w-8 text-emerald-600 hover:text-emerald-700'
-                          }
-                          title={isPublished ? 'Yayından Kaldır (Taslağa Al)' : 'Yayınla'}
-                          disabled={
-                            unpublishProductMutation.isPending || publishProductMutation.isPending
-                          }
-                          onClick={async () => {
-                            setPublishError(null);
-                            try {
-                              if (isPublished) {
-                                await unpublishProductMutation.mutateAsync(product.parentSku);
-                                toast.success(`${product.parentSku} taslağa alındı.`);
-                              } else {
-                                await publishProductMutation.mutateAsync(product.parentSku);
-                                toast.success(`${product.parentSku} yayına alındı.`);
-                              }
-                            } catch (err) {
-                              const msg = formatPublishError(err);
-                              setPublishError(msg);
-                              toast.error(msg);
+                        <CapabilityGate capability="catalog:publish">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={
+                              isPublished
+                                ? 'h-8 w-8 text-amber-600 hover:text-amber-700'
+                                : 'h-8 w-8 text-emerald-600 hover:text-emerald-700'
                             }
-                          }}
-                        >
-                          {isPublished ? (
-                            <EyeOff className="w-3.5 h-3.5" />
-                          ) : (
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          )}
-                        </Button>
+                            title={isPublished ? 'Yayından Kaldır (Taslağa Al)' : 'Yayınla'}
+                            disabled={
+                              unpublishProductMutation.isPending || publishProductMutation.isPending
+                            }
+                            onClick={async () => {
+                              setPublishError(null);
+                              try {
+                                if (isPublished) {
+                                  await unpublishProductMutation.mutateAsync(product.parentSku);
+                                  toast.success(`${product.parentSku} taslağa alındı.`);
+                                } else {
+                                  await publishProductMutation.mutateAsync(product.parentSku);
+                                  toast.success(`${product.parentSku} yayına alındı.`);
+                                }
+                              } catch (err) {
+                                const msg = formatPublishError(err);
+                                setPublishError(msg);
+                                toast.error(msg);
+                              }
+                            }}
+                          >
+                            {isPublished ? (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            ) : (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            )}
+                          </Button>
+                        </CapabilityGate>
                         <Button
                           type="button"
                           variant="ghost"
