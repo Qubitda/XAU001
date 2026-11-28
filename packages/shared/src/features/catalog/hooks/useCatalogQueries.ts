@@ -72,9 +72,25 @@ export function useUpdateProductMutation() {
 
 export function useDeleteProductMutation() {
   const queryClient = useQueryClient();
+  const { role, activeOrganization, authenticated } = useAuth();
+  const isRemote = isRemoteBackendConfigured();
+  const effectiveRole: AudienceRole = isRemote && !authenticated ? 'b2c' : role;
+  const currentKey = catalogQueryKeys.products(effectiveRole, activeOrganization?.id ?? null);
+
   return useMutation({
     mutationFn: (parentSku: string) => catalogService.deleteProduct(parentSku),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      queryClient.setQueryData<ProductState[]>(currentKey, (items = []) => {
+        if (res.deleted) {
+          return items.filter((item) => item.parentSku !== res.parentSku);
+        }
+        if (res.archived) {
+          return items.map((item) =>
+            item.parentSku === res.parentSku ? { ...item, catalogStatus: 'ARCHIVED' } : item
+          );
+        }
+        return items;
+      });
       void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.all });
     },
   });
