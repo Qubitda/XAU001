@@ -178,9 +178,14 @@ class PriceQuote(TimestampedModel):
         B2B_API = "B2B_API", "B2B API"
         B2C_API = "B2C_API", "B2C API"
 
-    product = models.ForeignKey(ProductModel, on_delete=models.PROTECT, related_name="quotes")
-    variant = models.ForeignKey(ProductVariant, on_delete=models.PROTECT, null=True, blank=True)
-    recipe = models.ForeignKey(PricingRecipe, on_delete=models.PROTECT, related_name="quotes")
+    product = models.ForeignKey(
+        ProductModel, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotes"
+    )
+    product_sku = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    variant = models.ForeignKey(ProductVariant, on_delete=models.SET_NULL, null=True, blank=True)
+    recipe = models.ForeignKey(
+        PricingRecipe, on_delete=models.SET_NULL, null=True, blank=True, related_name="quotes"
+    )
     rate_snapshot = models.ForeignKey(RateSnapshot, on_delete=models.PROTECT, related_name="quotes")
     organization = models.ForeignKey(Organization, on_delete=models.SET_NULL, null=True, blank=True)
     channel = models.CharField(max_length=16, choices=Channel.choices)
@@ -203,13 +208,16 @@ class PriceQuote(TimestampedModel):
     def save(self, *args, **kwargs):
         if not self._state.adding:
             raise ValidationError("PriceQuote kayıtları oluşturulduktan sonra değiştirilemez (immutable).")
+        if self.product_id and not self.product_sku:
+            self.product_sku = self.product.parent_sku
         return super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         raise ValidationError("PriceQuote kayıtları silinemez (immutable).")
 
     def __str__(self) -> str:
-        return f"{self.channel} {self.product.parent_sku} · {self.final_price_try} TRY"
+        sku = self.product.parent_sku if self.product_id else (self.product_sku or "?")
+        return f"{self.channel} {sku} · {self.final_price_try} TRY"
 
 
 class PriceLock(TimestampedModel):

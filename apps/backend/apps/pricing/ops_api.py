@@ -88,12 +88,12 @@ def serialize_ops_price_quote(q: PriceQuote) -> dict:
     is_active = recipe_status == PricingRecipe.Status.PUBLISHED
     return {
         "id": str(q.id),
-        "productId": str(q.product_id),
-        "parentSku": q.product.parent_sku,
+        "productId": str(q.product_id) if q.product_id else None,
+        "parentSku": q.product.parent_sku if q.product_id else q.product_sku,
         "variantId": str(q.variant_id) if q.variant_id else None,
         "variantSku": q.variant.sku if q.variant else None,
-        "recipeId": str(q.recipe_id),
-        "recipeVersion": q.recipe.version,
+        "recipeId": str(q.recipe_id) if q.recipe_id else None,
+        "recipeVersion": q.recipe.version if q.recipe_id else None,
         "recipeStatus": recipe_status,
         "isActive": is_active,
         "snapshotId": q.rate_snapshot.snapshot_code,
