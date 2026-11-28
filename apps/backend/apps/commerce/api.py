@@ -9,7 +9,12 @@ from apps.idempotency.mixins import IdempotentCreateMixin
 from apps.authorization.permissions import HasPortalPermission, IsB2bOrganizationMember
 from apps.common.responses import envelope_response
 from apps.market.services import get_current_rate_snapshot
-from apps.organizations.selectors import get_authorized_branches, resolve_tenant_context
+from apps.organizations.selectors import (
+    get_authorized_branches,
+    resolve_tenant_context,
+    scope_queryset_to_branch,
+    scope_queryset_to_organization,
+)
 from apps.pricing.services import get_latest_price_lock, get_or_refresh_price_lock
 from config.exceptions import DomainError
 from .models import B2bDraftLine, B2bOrder, B2cCartItem, B2cOrder
@@ -449,7 +454,7 @@ class B2bDraftView(APIView):
 
     def delete(self, request: Request):
         ctx = resolve_tenant_context(request, require_organization=True)
-        B2bDraftLine.objects.filter(organization=ctx.organization).delete()
+        scope_queryset_to_organization(B2bDraftLine.objects.all(), ctx).delete()
         from .models import CartRecoverySession
         from .recovery import suppress_b2b_draft
 
@@ -480,7 +485,7 @@ class B2bDraftLineDetailView(APIView):
 
     def patch(self, request: Request, line_id: str):
         ctx = resolve_tenant_context(request, require_organization=True)
-        line = B2bDraftLine.objects.filter(id=line_id, organization=ctx.organization).first()
+        line = scope_queryset_to_organization(B2bDraftLine.objects.all(), ctx).filter(id=line_id).first()
         if line is None:
             raise DomainError("Sipariş fişi satırı bulunamadı.", code="NOT_FOUND", status_code=404)
         serializer = B2bDraftLineUpdateSerializer(data=request.data, partial=True)
@@ -500,7 +505,7 @@ class B2bDraftLineDetailView(APIView):
 
     def delete(self, request: Request, line_id: str):
         ctx = resolve_tenant_context(request, require_organization=True)
-        B2bDraftLine.objects.filter(id=line_id, organization=ctx.organization).delete()
+        scope_queryset_to_organization(B2bDraftLine.objects.all(), ctx).filter(id=line_id).delete()
         from .recovery import touch_b2b_draft
 
         touch_b2b_draft(user=request.user, organization=ctx.organization)
@@ -514,13 +519,11 @@ def _b2b_authorized_branch_ids(ctx) -> list:
 
 
 def _scope_b2b_orders_qs(qs, ctx):
-    if ctx.is_ops:
-        return qs
-    qs = qs.filter(organization=ctx.organization)
-    branch_ids = _b2b_authorized_branch_ids(ctx)
-    if branch_ids:
-        return qs.filter(branch_id__in=branch_ids)
-    return qs.filter(branch__isnull=True)
+    return scope_queryset_to_branch(
+        scope_queryset_to_organization(qs, ctx),
+        ctx,
+        include_unassigned=True,
+    )
 
 
 def _assert_b2b_draft_branch_access(ctx) -> None:
@@ -638,7 +641,9 @@ class B2bDraftProformaPdfView(APIView):
 
         ctx = resolve_tenant_context(request, require_organization=True)
         _assert_b2b_draft_branch_access(ctx)
-        lines = list(B2bDraftLine.objects.filter(organization=ctx.organization).order_by("-updated_at"))
+        lines = list(
+            scope_queryset_to_organization(B2bDraftLine.objects.all(), ctx).order_by("-updated_at")
+        )
         if not lines:
             raise DomainError("Taslak boş — PDF oluşturulamaz.", code="EMPTY_DRAFT", status_code=400)
         snap = get_current_rate_snapshot()
@@ -662,9 +667,11 @@ class B2bOrderProformaPdfView(APIView):
 
         ctx = resolve_tenant_context(request, require_organization=True)
         order = (
-            B2bOrder.objects.select_related("organization", "branch")
-            .prefetch_related("lines")
-            .filter(order_no=order_no, organization=ctx.organization)
+            scope_queryset_to_organization(
+                B2bOrder.objects.select_related("organization", "branch").prefetch_related("lines"),
+                ctx,
+            )
+            .filter(order_no=order_no)
             .first()
         )
         if order is None:
