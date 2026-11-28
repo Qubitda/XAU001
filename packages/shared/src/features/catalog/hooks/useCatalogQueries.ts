@@ -82,9 +82,21 @@ export function useDeleteProductMutation() {
 
 export function usePublishProductMutation() {
   const queryClient = useQueryClient();
+  const { role, activeOrganization, authenticated } = useAuth();
+  const isRemote = isRemoteBackendConfigured();
+  const effectiveRole: AudienceRole = isRemote && !authenticated ? 'b2c' : role;
+  const currentKey = catalogQueryKeys.products(effectiveRole, activeOrganization?.id ?? null);
+
   return useMutation({
     mutationFn: (parentSku: string) => catalogService.publishProduct(parentSku),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      queryClient.setQueryData<ProductState[]>(currentKey, (items = []) =>
+        items.map((item) =>
+          item.parentSku === res.parentSku
+            ? { ...item, catalogStatus: res.catalogStatus as ProductState['catalogStatus'] }
+            : item
+        )
+      );
       void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.all });
     },
   });
@@ -92,9 +104,21 @@ export function usePublishProductMutation() {
 
 export function useUnpublishProductMutation() {
   const queryClient = useQueryClient();
+  const { role, activeOrganization, authenticated } = useAuth();
+  const isRemote = isRemoteBackendConfigured();
+  const effectiveRole: AudienceRole = isRemote && !authenticated ? 'b2c' : role;
+  const currentKey = catalogQueryKeys.products(effectiveRole, activeOrganization?.id ?? null);
+
   return useMutation({
     mutationFn: (parentSku: string) => catalogService.unpublishProduct(parentSku),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      queryClient.setQueryData<ProductState[]>(currentKey, (items = []) =>
+        items.map((item) =>
+          item.parentSku === res.parentSku
+            ? { ...item, catalogStatus: res.catalogStatus as ProductState['catalogStatus'] }
+            : item
+        )
+      );
       void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.all });
     },
   });
