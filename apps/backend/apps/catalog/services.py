@@ -1,3 +1,6 @@
+# NOT: pricing modeli catalog.ProductModel'e FK ile bağlıdır; catalog da
+# recipe durumunu kontrol etmek için pricing'e bakar. Bu domain'ler birbirinden
+# bağımsız deploy edilemez. Bkz: ARCHITECTURE.md#catalog-pricing-coupling
 """Domain services for catalog publishing gates and variant synchronization."""
 from __future__ import annotations
 

@@ -1,3 +1,6 @@
+# NOT: pricing modeli catalog.ProductModel'e FK ile bağlıdır; catalog da
+# recipe durumunu kontrol etmek için pricing'e bakar. Bu domain'ler birbirinden
+# bağımsız deploy edilemez. Bkz: ARCHITECTURE.md#catalog-pricing-coupling
 from decimal import Decimal
 from django.conf import settings
 from django.core.exceptions import ValidationError
