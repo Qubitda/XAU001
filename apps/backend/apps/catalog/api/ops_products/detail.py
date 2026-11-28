@@ -16,6 +16,7 @@ from apps.common.responses import apply_safe_ordering, envelope_response, pagina
 from apps.inventory.services import get_or_create_default_warehouse, set_variant_warehouse_stock
 from apps.market.services import get_current_rate_snapshot
 from apps.organizations.selectors import resolve_active_organization, resolve_tenant_context
+from apps.pricing.field_policy import payload_affects_price
 from apps.pricing.models import PricingRecipe
 from apps.pricing.services import publish_recipe
 from config.exceptions import DomainError
@@ -33,6 +34,42 @@ from ..serializers import _apply_filters, _products_queryset, serialize_ops_prod
 
 from .permissions import _enforce_field_permissions
 
+def _build_price_history(product: ProductModel) -> list[dict]:
+    from apps.audit.models import AuditLog
+
+    recipe_ids = [str(rid) for rid in product.pricing_recipes.values_list("id", flat=True)]
+    if not recipe_ids:
+        return []
+    logs = list(
+        AuditLog.objects.filter(
+            action="PRICING_RECIPE_PUBLISHED",
+            entity_type="PricingRecipe",
+            entity_id__in=recipe_ids,
+        )
+        .select_related("actor")
+        .order_by("-created_at")[:6]
+    )
+    history: list[dict] = []
+    for idx, log in enumerate(logs[:5]):
+        prev = logs[idx + 1] if idx + 1 < len(logs) else None
+        meta = log.metadata or {}
+        prev_meta = (prev.metadata or {}) if prev else {}
+        actor_label = log.actor.email if log.actor else "Sistem"
+        history.append(
+            {
+                "id": str(log.id),
+                "version": meta.get("version"),
+                "oldB2cTry": prev_meta.get("b2c_try"),
+                "newB2cTry": meta.get("b2c_try"),
+                "oldB2bTry": prev_meta.get("b2b_try"),
+                "newB2bTry": meta.get("b2b_try"),
+                "changedAt": log.created_at.isoformat(),
+                "changedBy": actor_label,
+            }
+        )
+    return history
+
+
 class OpsProductDetailView(APIView):
     permission_classes = [HasPortalPermission]
     ops_only = True
@@ -48,7 +85,9 @@ class OpsProductDetailView(APIView):
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
         recipe = product.published_recipes[0] if product.published_recipes else None
-        return envelope_response(serialize_ops_product(product, recipe, rates), request)
+        payload = serialize_ops_product(product, recipe, rates)
+        payload["priceHistory"] = _build_price_history(product)
+        return envelope_response(payload, request)
 
     @transaction.atomic
     def patch(self, request: Request, parent_sku: str):
@@ -288,17 +327,30 @@ class OpsProductDetailView(APIView):
         if updated_center_carat is not None:
             sync_default_variant_center_carat(product)
 
-        if "ledger" in d or "pricingMode" in d:
-            recipe = _sync_recipe_from_ledger(
-                product=product,
-                pricing_mode=d.get("pricingMode"),
-                ledger=d.get("ledger"),
-                actor=request.user,
-            )
+        dual_write_product_details(product, _detail_overrides_from_payload(d))
+
+        price_updated = False
+        if payload_affects_price(d):
+            if "ledger" in d or "pricingMode" in d:
+                recipe = _sync_recipe_from_ledger(
+                    product=product,
+                    pricing_mode=d.get("pricingMode"),
+                    ledger=d.get("ledger"),
+                    actor=request.user,
+                )
+            else:
+                recipe = (
+                    product.pricing_recipes.filter(status=PricingRecipe.Status.PUBLISHED).first()
+                    or product.pricing_recipes.filter(status=PricingRecipe.Status.DRAFT)
+                    .order_by("-version")
+                    .first()
+                )
+            if recipe is not None:
+                recipe, _ = publish_recipe(recipe, actor=request.user)
+                price_updated = True
         else:
             recipe = product.pricing_recipes.filter(status=PricingRecipe.Status.PUBLISHED).first()
 
-        dual_write_product_details(product, _detail_overrides_from_payload(d))
         record_audit(
             action="PRODUCT_UPDATED",
             entity_type="ProductModel",
@@ -308,7 +360,32 @@ class OpsProductDetailView(APIView):
         )
         rates = get_current_rate_snapshot()
         product = _products_queryset().get(id=product.id)
-        return envelope_response(serialize_ops_product(product, recipe, rates), request)
+        payload = serialize_ops_product(product, recipe, rates)
+        new_price = None
+        if price_updated:
+            variants = payload.get("variants") or []
+            default_v = next((v for v in variants if v.get("isDefault")), variants[0] if variants else None)
+            b2c_p = (default_v or {}).get("b2cPricing") or {}
+            b2b_p = (default_v or {}).get("b2bPricing") or {}
+            new_price = {
+                "defaultVariantSku": default_v.get("sku") if default_v else None,
+                "b2cTry": b2c_p.get("finalPriceTry"),
+                "b2bTry": b2b_p.get("finalPriceTry"),
+                "b2bLc": b2b_p.get("finalPriceLc"),
+                "lcCurrency": b2b_p.get("lcCurrency") or payload.get("pricingCurrency") or "TRY",
+                "variants": [
+                    {
+                        "sku": v.get("sku"),
+                        "b2cTry": (v.get("b2cPricing") or {}).get("finalPriceTry"),
+                        "b2bTry": (v.get("b2bPricing") or {}).get("finalPriceTry"),
+                    }
+                    for v in variants
+                ],
+            }
+        payload["priceUpdated"] = price_updated
+        payload["newPrice"] = new_price
+        payload["priceHistory"] = _build_price_history(product)
+        return envelope_response(payload, request)
 
     @transaction.atomic
     def delete(self, request: Request, parent_sku: str):

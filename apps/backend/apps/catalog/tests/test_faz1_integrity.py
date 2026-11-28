@@ -105,7 +105,7 @@ class Faz1CatalogIntegrityTests(TestCase):
         )
         self.assertEqual(bad.status_code, 400)
 
-        # Partial ledger PATCH only updating laborFcPrice preserves stone cost & currency and stays DRAFT
+        # Partial ledger PATCH only updating laborFcPrice preserves stone cost & currency and auto-publishes (Hybrid Option C)
         ok = self.client.patch(
             "/api/v1/ops/products/LED-01",
             data=json.dumps({"ledger": {"laborFcPrice": "35.00"}}),
@@ -113,11 +113,16 @@ class Faz1CatalogIntegrityTests(TestCase):
         )
         self.assertEqual(ok.status_code, 200, ok.content)
         pub.refresh_from_db()
-        self.assertEqual(pub.status, PricingRecipe.Status.PUBLISHED)
-        draft = PricingRecipe.objects.filter(product=p, status=PricingRecipe.Status.DRAFT).first()
-        self.assertIsNotNone(draft)
-        stone = CostLine.objects.get(recipe=draft, line_type=CostLine.LineType.TAS)
-        labor = CostLine.objects.get(recipe=draft, line_type=CostLine.LineType.ISCILIK)
+        self.assertEqual(pub.status, PricingRecipe.Status.ARCHIVED)
+        latest_pub = (
+            PricingRecipe.objects.filter(product=p, status=PricingRecipe.Status.PUBLISHED)
+            .order_by("-version")
+            .first()
+        )
+        self.assertIsNotNone(latest_pub)
+        self.assertEqual(latest_pub.version, 2)
+        stone = CostLine.objects.get(recipe=latest_pub, line_type=CostLine.LineType.TAS)
+        labor = CostLine.objects.get(recipe=latest_pub, line_type=CostLine.LineType.ISCILIK)
         self.assertEqual(stone.fc_price, Decimal("250.00"))
         self.assertEqual(stone.fc_currency, "USD")
         self.assertEqual(labor.fc_price, Decimal("35.00"))
