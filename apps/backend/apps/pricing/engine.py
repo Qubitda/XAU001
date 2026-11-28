@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal, Sequence
 
-TROY_OZ_TO_GRAM = Decimal("31.1034768")
+from apps.common.units import TROY_OZ_TO_GRAM
+
 ZERO = Decimal("0")
 ONE = Decimal("1")
 HUNDRED = Decimal("100")

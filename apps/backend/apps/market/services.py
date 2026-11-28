@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 from apps.audit.services import record_audit
-from apps.pricing.engine import TROY_OZ_TO_GRAM
+from apps.common.units import TROY_OZ_TO_GRAM
 from .models import RateSnapshot
 
 DEFAULT_FX_BASE_RATES: dict[str, str] = {

@@ -8,7 +8,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from apps.audit.services import record_audit
-from apps.pricing.engine import TROY_OZ_TO_GRAM
+from apps.common.units import TROY_OZ_TO_GRAM
 from config.exceptions import DomainError
 from .models import ExchangeMetalMatrix, ExchangeMetalRate
 from .services import DEFAULT_FX_BASE_RATES, create_rate_snapshot, get_current_rate_snapshot
