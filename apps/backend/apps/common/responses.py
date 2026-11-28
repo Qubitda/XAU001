@@ -86,6 +86,7 @@ def paginated_envelope_response(
     *,
     default_page_size: int = 25,
     max_page_size: int = 200,
+    extra_meta: dict[str, Any] | None = None,
 ) -> Response:
     """
     Standardized pagination wrapper preserving the Tara Gold {data, meta} envelope.
@@ -109,17 +110,20 @@ def paginated_envelope_response(
     rows = list(qs[offset : offset + page_size])
     items = [serializer_fn(obj) for obj in rows]
 
+    meta_payload: dict[str, Any] = {
+        "pagination": {
+            "page": page,
+            "pageSize": page_size,
+            "total": total,
+            "totalPages": total_pages,
+            "hasNext": page < total_pages,
+            "hasPrev": page > 1,
+        }
+    }
+    if extra_meta:
+        meta_payload.update(extra_meta)
     return envelope_response(
         items,
         request=request,
-        extra_meta={
-            "pagination": {
-                "page": page,
-                "pageSize": page_size,
-                "total": total,
-                "totalPages": total_pages,
-                "hasNext": page < total_pages,
-                "hasPrev": page > 1,
-            }
-        },
+        extra_meta=meta_payload,
     )
