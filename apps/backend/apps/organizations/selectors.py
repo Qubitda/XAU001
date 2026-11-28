@@ -314,33 +314,6 @@ def resolve_active_branch(
     return branch
 
 
-def assert_branch_in_tenant_scope(branch: Branch | None, ctx: TenantContext) -> None:
-    """OPS may attach any active branch; non-OPS must stay within authorized branches."""
-    if branch is None:
-        return
-    if ctx.is_ops:
-        if not branch.is_active or not branch.organization.is_active:
-            raise DomainError(
-                "Pasif şube veya firma ile işlem yapılamaz.",
-                code="BRANCH_INACTIVE",
-                status_code=400,
-            )
-        return
-    if ctx.organization is None or branch.organization_id != ctx.organization.id:
-        raise DomainError(
-            "Bu şube aktif firma kapsamınızda değil.",
-            code="BRANCH_ACCESS_DENIED",
-            status_code=403,
-        )
-    allowed = {str(b.id) for b in get_authorized_branches(ctx.membership)} if ctx.membership else set()
-    if str(branch.id) not in allowed:
-        raise DomainError(
-            "Bu şubeye erişim yetkiniz bulunmuyor.",
-            code="BRANCH_ACCESS_DENIED",
-            status_code=403,
-        )
-
-
 def scope_queryset_to_organization(
     qs,
     ctx: TenantContext,
