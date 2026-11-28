@@ -102,25 +102,3 @@ def abandon_idempotency_claim(*, record: IdempotencyRecord) -> None:
     """Drop a pending claim so a retry can succeed after a 5xx."""
     if record.response_status == PENDING_STATUS:
         IdempotencyRecord.objects.filter(pk=record.pk, response_status=PENDING_STATUS).delete()
-
-
-def store_idempotency_record(
-    *,
-    scope: str,
-    key: str,
-    request_hash: str,
-    response_status: int,
-    response_body: dict,
-) -> IdempotencyRecord:
-    expires_at = timezone.now() + IDEMPOTENCY_TTL
-    record, _created = IdempotencyRecord.objects.update_or_create(
-        scope=scope,
-        key=key,
-        defaults={
-            "request_hash": request_hash,
-            "response_status": response_status,
-            "response_body": response_body,
-            "expires_at": expires_at,
-        },
-    )
-    return record
