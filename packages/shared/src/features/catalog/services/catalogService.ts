@@ -84,8 +84,10 @@ export const catalogService = {
     return res.data;
   },
 
-  async deleteProduct(parentSku: string): Promise<{ parentSku: string; deleted: boolean }> {
-    const res = await apiFetch<{ parentSku: string; deleted: boolean }>(
+  async deleteProduct(
+    parentSku: string
+  ): Promise<{ parentSku: string; deleted: boolean; archived?: boolean }> {
+    const res = await apiFetch<{ parentSku: string; deleted: boolean; archived?: boolean }>(
       `/api/v1/ops/products/${encodeURIComponent(parentSku)}`,
       {
         method: 'DELETE',

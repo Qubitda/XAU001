@@ -252,7 +252,7 @@ export function useCreateStockMovementMutation() {
       variantSku?: string;
       warehouseId?: string;
       warehouseCode?: string;
-      movementType: 'INBOUND' | 'SHIP' | 'RESERVE' | 'RELEASE';
+      movementType: 'INBOUND' | 'SHIP' | 'RESERVE' | 'RELEASE' | 'SET';
       quantity: number;
       referenceNo: string;
     }) => opsService.createStockMovement(body),

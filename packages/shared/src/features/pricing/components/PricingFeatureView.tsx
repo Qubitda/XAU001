@@ -52,9 +52,11 @@ export function PricingFeatureView() {
   const updateProductMutation = useUpdateProductMutation();
   const [recipeInfo, setRecipeInfo] = useState<RecipeSnapshotInfo | null>(null);
   const [previewSnapshotRates, setPreviewSnapshotRates] = useState(false);
+  const [manualRates, setManualRates] = useState<LiveRates | null>(null);
 
   useEffect(() => {
     setPreviewSnapshotRates(false);
+    setManualRates(null);
     setRecipeInfo(null);
     if (!activeProduct?.parentSku) return;
     let active = true;
@@ -92,10 +94,15 @@ export function PricingFeatureView() {
     };
   }, [recipeInfo, rates]);
 
-  const effectiveRates = previewSnapshotRates && snapshotRates ? snapshotRates : rates;
+  const effectiveRates = manualRates ?? (previewSnapshotRates && snapshotRates ? snapshotRates : rates);
   const effectiveComputed = useMemo(
-    () => (previewSnapshotRates && snapshotRates ? computeJewelryMetrics(product, snapshotRates) : computed),
-    [previewSnapshotRates, snapshotRates, product, computed]
+    () =>
+      manualRates
+        ? computeJewelryMetrics(product, manualRates)
+        : previewSnapshotRates && snapshotRates
+          ? computeJewelryMetrics(product, snapshotRates)
+          : computed,
+    [manualRates, previewSnapshotRates, snapshotRates, product, computed]
   );
 
   const handleUpdateProduct = (patch: Partial<ProductState>) => {
@@ -127,7 +134,7 @@ export function PricingFeatureView() {
         ...(patch.fxBaseRates ?? {}),
       },
     };
-    setLocalRates(nextRates);
+    setManualRates(nextRates);
     persistRecipeSnapshot(nextRates, true);
   };
 
