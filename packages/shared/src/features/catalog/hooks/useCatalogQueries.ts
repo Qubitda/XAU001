@@ -68,19 +68,6 @@ export function useUpdateProductMutation() {
   return useMutation({
     mutationFn: ({ parentSku, patch }: { parentSku: string; patch: Partial<ProductState> }) =>
       catalogService.updateProduct(parentSku, patch),
-    onMutate: async ({ parentSku, patch }) => {
-      await queryClient.cancelQueries({ queryKey: currentKey });
-      const prev = queryClient.getQueryData<ProductState[]>(currentKey);
-      queryClient.setQueryData<ProductState[]>(currentKey, (items = []) =>
-        items.map((item) => (item.parentSku === parentSku ? { ...item, ...patch } : item))
-      );
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) {
-        queryClient.setQueryData(currentKey, ctx.prev);
-      }
-    },
     onSuccess: (updated) => {
       queryClient.setQueryData<ProductState[]>(currentKey, (items = []) =>
         items.map((item) => (item.parentSku === updated.parentSku ? updated : item))
@@ -94,6 +81,26 @@ export function useDeleteProductMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (parentSku: string) => catalogService.deleteProduct(parentSku),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.all });
+    },
+  });
+}
+
+export function usePublishProductMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (parentSku: string) => catalogService.publishProduct(parentSku),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.all });
+    },
+  });
+}
+
+export function useUnpublishProductMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (parentSku: string) => catalogService.unpublishProduct(parentSku),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: catalogQueryKeys.all });
     },

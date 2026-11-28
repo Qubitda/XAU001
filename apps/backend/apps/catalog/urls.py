@@ -12,13 +12,19 @@ from apps.catalog.api import (
     StorefrontProductDetailView,
     StorefrontProductListView,
 )
-from apps.catalog.api.ops_products import OpsProductPublishView, OpsProductRecipePublishView
+from apps.catalog.api.ops_products import (
+    OpsCatalogMediaUploadView,
+    OpsProductPublishView,
+    OpsProductRecipePublishView,
+    OpsProductUnpublishView,
+)
 from apps.catalog.api.ops_variants import (
     OpsCategorySummaryView,
     OpsProductMediaDetailView,
     OpsProductMediaListCreateView,
     OpsStoneLineDetailView,
     OpsStoneLineListCreateView,
+    OpsVariantBulkCreateView,
     OpsVariantDetailView,
     OpsVariantListCreateView,
 )
@@ -61,11 +67,17 @@ urlpatterns = [
         name="ops-product-publish",
     ),
     path(
+        "api/v1/ops/products/<str:parent_sku>/unpublish",
+        OpsProductUnpublishView.as_view(),
+        name="ops-product-unpublish",
+    ),
+    path(
         "api/v1/ops/products/<str:parent_sku>/recipe/publish",
         OpsProductRecipePublishView.as_view(),
         name="ops-product-recipe-publish",
     ),
     path("api/v1/ops/variants", OpsVariantListCreateView.as_view(), name="ops-variants"),
+    path("api/v1/ops/variants/bulk", OpsVariantBulkCreateView.as_view(), name="ops-variants-bulk"),
     path(
         "api/v1/ops/variants/<uuid:variant_id>",
         OpsVariantDetailView.as_view(),
@@ -78,6 +90,7 @@ urlpatterns = [
         name="ops-stone-line-detail",
     ),
     path("api/v1/ops/media", OpsProductMediaListCreateView.as_view(), name="ops-media"),
+    path("api/v1/ops/catalog/media-upload", OpsCatalogMediaUploadView.as_view(), name="ops-catalog-media-upload"),
     path(
         "api/v1/ops/media/<uuid:media_id>",
         OpsProductMediaDetailView.as_view(),

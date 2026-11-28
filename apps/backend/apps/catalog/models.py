@@ -159,6 +159,7 @@ class ProductModel(TimestampedModel):
     is_resizable = models.BooleanField(default=True)
 
     warranty_months = models.PositiveSmallIntegerField(default=24)
+    lifetime_maintenance = models.CharField(max_length=160, blank=True, default="")
     insured_shipping_info = models.CharField(
         max_length=200, default="Tam sigortalı Brinks / Loomis özel kurye"
     )
@@ -167,6 +168,16 @@ class ProductModel(TimestampedModel):
     )
     seo_slug = models.SlugField(max_length=240, unique=True)
     meta_title = models.CharField(max_length=240, blank=True, default="")
+    meta_description = models.TextField(blank=True, default="")
+    marketplace_category = models.CharField(max_length=255, blank=True, default="")
+    size_guide_url = models.CharField(max_length=500, blank=True, default="")
+    og_image = models.CharField(max_length=500, blank=True, default="")
+    canonical_url = models.CharField(max_length=500, blank=True, default="")
+    robots = models.CharField(max_length=64, blank=True, default="index,follow")
+    keywords = models.CharField(max_length=500, blank=True, default="")
+    b2b_share_permission = models.CharField(max_length=64, blank=True, default="ALLOWED")
+    dynamic_dealer_watermark = models.BooleanField(default=True)
+    social_share_caption = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -361,10 +372,13 @@ class ProductVariant(TimestampedModel):
 class ProductMedia(TimestampedModel):
     class MediaRole(models.TextChoices):
         GALLERY_MAIN = "GALLERY_MAIN", "Ana Stüdyo"
+        GALLERY = "GALLERY", "Galeri"
         ON_HAND = "ON_HAND", "Elde / Model"
         MACRO = "MACRO", "Makro Detay"
+        DETAIL = "DETAIL", "Detay"
         VIDEO_REELS = "VIDEO_REELS", "Video / Reels"
         SPIN_360 = "SPIN_360", "360 Derece"
+        CATALOG_CLEAN = "CATALOG_CLEAN", "Filigransız Katalog Görseli"
         CERTIFICATE_PDF = "CERTIFICATE_PDF", "Sertifika"
 
     product = models.ForeignKey(ProductModel, on_delete=models.CASCADE, related_name="media_items")

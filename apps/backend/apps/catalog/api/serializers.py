@@ -37,12 +37,26 @@ def _catalog_card_fields(
     media_items = list(product.media_items.all())
     gallery_roles = {
         ProductMedia.MediaRole.GALLERY_MAIN,
+        ProductMedia.MediaRole.GALLERY,
         ProductMedia.MediaRole.ON_HAND,
         ProductMedia.MediaRole.MACRO,
+        ProductMedia.MediaRole.DETAIL,
     }
-    gallery_urls = [m.url for m in sorted(media_items, key=lambda x: x.sort_order) if m.role in gallery_roles]
+    sorted_media = sorted(media_items, key=lambda x: x.sort_order)
+    gallery_urls = [m.url for m in sorted_media if m.role in gallery_roles]
+    serialized_media = [
+        {
+            "id": str(m.id),
+            "metalColor": m.metal_color,
+            "role": m.role,
+            "url": m.url,
+            "sortOrder": m.sort_order,
+        }
+        for m in sorted_media
+    ]
     reels_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.VIDEO_REELS), "")
     spin_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.SPIN_360), "")
+    catalog_clean_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.CATALOG_CLEAN), "")
     cert_url = next((m.url for m in media_items if m.role == ProductMedia.MediaRole.CERTIFICATE_PDF), "")
     effective_stock_status = (
         ProductModel.StockStatus.OUT_OF_STOCK
@@ -114,13 +128,26 @@ def _catalog_card_fields(
         "claspType": product.clasp_type,
         "isResizable": product.is_resizable,
         "galleryImages": gallery_urls,
+        "mediaItems": serialized_media,
         "reelsVideoUrl": reels_url,
         "spin360Url": spin_url,
+        "catalogCleanImageUrl": catalog_clean_url,
+        "b2bSharePermission": product.b2b_share_permission or "ALLOWED",
+        "dynamicDealerWatermark": product.dynamic_dealer_watermark,
+        "socialShareCaption": product.social_share_caption,
         "warrantyMonths": product.warranty_months,
+        "lifetimeMaintenance": product.lifetime_maintenance,
         "insuredShippingInfo": product.insured_shipping_info,
         "returnPolicyText": product.return_policy_text,
         "seoSlug": product.seo_slug,
         "metaTitle": product.meta_title or product.title,
+        "metaDescription": product.meta_description,
+        "marketplaceCategory": product.marketplace_category,
+        "sizeGuideUrl": product.size_guide_url,
+        "ogImage": product.og_image,
+        "canonicalUrl": product.canonical_url,
+        "robots": product.robots or "index,follow",
+        "keywords": product.keywords,
         "inStock": product.stock_qty > 0 or product.stock_status == ProductModel.StockStatus.MADE_TO_ORDER,
         "catalogStatus": product.catalog_status,
     }

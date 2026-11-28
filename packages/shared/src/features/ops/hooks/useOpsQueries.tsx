@@ -228,6 +228,41 @@ export function useDeactivateOpsVariantMutation() {
   });
 }
 
+export function useBulkCreateOpsVariantsMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      parentSku: string;
+      purities: string[];
+      colors: string[];
+      sizes: number[];
+      centerStoneCarat?: string;
+      grossWeightGram: string;
+      initialStockQty?: number;
+    }) => opsService.bulkCreateVariants(body),
+    onSuccess: () => invalidateVariantRelated(qc),
+  });
+}
+
+export function useCreateStockMovementMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      variantId?: string;
+      variantSku?: string;
+      warehouseId?: string;
+      warehouseCode?: string;
+      movementType: 'INBOUND' | 'SHIP' | 'RESERVE' | 'RELEASE';
+      quantity: number;
+      referenceNo: string;
+    }) => opsService.createStockMovement(body),
+    onSuccess: () => {
+      invalidateVariantRelated(qc);
+      void qc.invalidateQueries({ queryKey: [...opsKeys.all, 'stock-movements'] });
+    },
+  });
+}
+
 export function useOpsStockTransferMutation() {
   const qc = useQueryClient();
   return useMutation({

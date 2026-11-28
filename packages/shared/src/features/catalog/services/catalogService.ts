@@ -64,6 +64,26 @@ export const catalogService = {
     return res.data;
   },
 
+  async publishProduct(parentSku: string): Promise<{ parentSku: string; catalogStatus: string }> {
+    const res = await apiFetch<{ parentSku: string; catalogStatus: string }>(
+      `/api/v1/ops/products/${encodeURIComponent(parentSku)}/publish`,
+      {
+        method: 'POST',
+      }
+    );
+    return res.data;
+  },
+
+  async unpublishProduct(parentSku: string): Promise<{ parentSku: string; catalogStatus: string }> {
+    const res = await apiFetch<{ parentSku: string; catalogStatus: string }>(
+      `/api/v1/ops/products/${encodeURIComponent(parentSku)}/unpublish`,
+      {
+        method: 'POST',
+      }
+    );
+    return res.data;
+  },
+
   async deleteProduct(parentSku: string): Promise<{ parentSku: string; deleted: boolean }> {
     const res = await apiFetch<{ parentSku: string; deleted: boolean }>(
       `/api/v1/ops/products/${encodeURIComponent(parentSku)}`,
@@ -84,6 +104,23 @@ export const catalogService = {
       method: 'PATCH',
       body: patch,
     });
+    return res.data;
+  },
+
+  async uploadMedia(
+    file: File,
+    kind: 'image' | 'video' | 'certificate' | 'any' = 'any'
+  ): Promise<{ url: string; path: string; filename: string; size: number }> {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('kind', kind);
+    const res = await apiFetch<{ url: string; path: string; filename: string; size: number }>(
+      '/api/v1/ops/catalog/media-upload',
+      {
+        method: 'POST',
+        body: fd,
+      }
+    );
     return res.data;
   },
 };

@@ -1,14 +1,11 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowDown,
-  ArrowUp,
   ArrowUpRight,
   Calculator,
   CheckCircle2,
   Diamond,
   EyeOff,
-  Film,
   Globe,
   Image as ImageIcon,
   Layers,
@@ -17,25 +14,27 @@ import {
   Plus,
   Save,
   Shield,
-  Sparkles,
   Trash2,
-  Upload,
   Warehouse,
   X,
 } from 'lucide-react';
-import { ProductVariantsPanel } from './ProductVariantsPanel';
+import { ProductVariantsPanel, type PendingMatrixConfig } from './ProductVariantsPanel';
 import { ProductStockPanel } from './ProductStockPanel';
+import { ProductMediaPanel } from './ProductMediaPanel';
+import { ProductSeoPanel } from './ProductSeoPanel';
+import { ProductSalesWarrantyPanel } from './ProductSalesWarrantyPanel';
 import {
   cloneLedger,
   createBlankProduct,
   createEmptyRates,
   withCurrentSelectOption,
 } from '../../../data/productDefaults';
-import { isRenderableMediaUrl, resolveProductMedia } from '../../../data/productMedia';
+import { isRenderableMediaUrl } from '../../../data/productMedia';
 import { EntityModal } from '../../../components/crud/EntityModal';
 import { Button, Input, Label } from '../../../components/ui';
 import { cn } from '../../../lib/utils';
 import { ApiClientError } from '../../../lib/api/client';
+import { catalogService } from '../services/catalogService';
 import {
   computeJewelryMetrics,
   deriveSalesChannelsFromRules,
@@ -46,11 +45,15 @@ import {
   resolveProductKind,
 } from '../../../utils/pricingEngine';
 import { productFormSchema } from '../schemas/productSchema';
+import { formatPublishError } from '../utils/publishMessages';
 import {
   useCreateProductMutation,
   useLiveRatesQuery,
+  usePublishProductMutation,
+  useUnpublishProductMutation,
   useUpdateProductMutation,
 } from '../hooks/useCatalogQueries';
+import { useBulkCreateOpsVariantsMutation } from '../../ops/hooks/useOpsQueries';
 import {
   filterOptionsByParent,
   useDefinitionOptions,
@@ -292,6 +295,48 @@ const TABS: { id: ProductModalTab; label: string; icon: typeof Package }[] = [
   { id: 'satis', label: 'Satış & Garanti', icon: Shield },
 ];
 
+const FIELD_TO_TAB: Record<string, ProductModalTab> = {
+  grossWeightGram: 'tas-montur',
+  centerStoneCarat: 'tas-montur',
+  sideStoneCarat: 'tas-montur',
+  fireRatePct: 'tas-montur',
+  stoneType: 'tas-montur',
+  stoneLines: 'tas-montur',
+  mountSpec: 'tas-montur',
+  stockQty: 'stok',
+  stockStatus: 'stok',
+  ownershipType: 'stok',
+  leadTimeDays: 'stok',
+  ledger: 'fiyatlandirma',
+  pricingMode: 'fiyatlandirma',
+  galleryImages: 'medya',
+  mediaItems: 'medya',
+  reelsVideoUrl: 'medya',
+  spin360Url: 'medya',
+  catalogCleanImageUrl: 'medya',
+  certificateFileUrl: 'medya',
+  seoSlug: 'seo',
+  metaTitle: 'seo',
+  metaDescription: 'seo',
+  marketplaceCategory: 'seo',
+  sizeGuideUrl: 'seo',
+  ogImage: 'seo',
+  canonicalUrl: 'seo',
+  robots: 'seo',
+  keywords: 'seo',
+  warrantyMonths: 'satis',
+  lifetimeMaintenance: 'satis',
+  insuredShippingInfo: 'satis',
+  returnPolicyText: 'satis',
+  supplierName: 'satis',
+};
+
+function resolveTabForField(field: string): ProductModalTab {
+  if (field in FIELD_TO_TAB) return FIELD_TO_TAB[field];
+  const root = field.split('.')[0];
+  return FIELD_TO_TAB[root] ?? 'genel';
+}
+
 function slugifyTurkish(input: string): string {
   const map: Record<string, string> = {
     ç: 'c',
@@ -436,8 +481,12 @@ export function ProductEntityModal({
   const [serverError, setServerError] = useState<string | null>(null);
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newSizeInput, setNewSizeInput] = useState('');
-  const [mediaNotice, setMediaNotice] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingMatrix, setPendingMatrix] = useState<PendingMatrixConfig>({
+    purities: [],
+    colors: [],
+    sizes: [],
+    initialStockQty: 0,
+  });
 
   const liveRatesQuery = useLiveRatesQuery();
   const rates = liveRatesQuery.data ?? createEmptyRates();
@@ -491,7 +540,15 @@ export function ProductEntityModal({
 
   const createMutation = useCreateProductMutation();
   const updateMutation = useUpdateProductMutation();
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const publishMutation = usePublishProductMutation();
+  const unpublishMutation = useUnpublishProductMutation();
+  const bulkVariantsMutation = useBulkCreateOpsVariantsMutation();
+  const isSubmitting =
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    publishMutation.isPending ||
+    unpublishMutation.isPending ||
+    bulkVariantsMutation.isPending;
 
   useEffect(() => {
     if (open) {
@@ -501,9 +558,13 @@ export function ProductEntityModal({
       setActiveTab(initialTab);
       setFieldErrors({});
       setServerError(null);
-      setNewImageUrl('');
       setNewSizeInput('');
-      setMediaNotice(null);
+      setPendingMatrix({
+        purities: next.purityCode ? [next.purityCode] : [],
+        colors: next.availableColors?.length ? next.availableColors : next.metalColor ? [next.metalColor] : [],
+        sizes: next.availableSizes?.length ? next.availableSizes : next.variantSize ? [next.variantSize] : [14],
+        initialStockQty: 0,
+      });
     }
   }, [open, mode, initialProduct, initialTab]);
 
@@ -706,55 +767,6 @@ export function ProductEntityModal({
     });
   };
 
-  const handleAddGalleryUrl = () => {
-    const trimmed = newImageUrl.trim();
-    if (!trimmed) return;
-    if (draft.galleryImages.includes(trimmed)) {
-      setMediaNotice('Bu görsel zaten galeride mevcut.');
-      return;
-    }
-    patchDraft('galleryImages', [...draft.galleryImages, trimmed]);
-    setNewImageUrl('');
-    setMediaNotice(null);
-  };
-
-  const handleUploadFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-    setMediaNotice(null);
-    const added: string[] = [];
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
-      try {
-        const dataUrl = await fileToCompressedDataUrl(file);
-        added.push(dataUrl);
-      } catch {
-        setMediaNotice('Görsellerden biri okunamadı.');
-      }
-    }
-    if (added.length > 0) {
-      patchDraft('galleryImages', [...draft.galleryImages, ...added]);
-      setMediaNotice(`${added.length} görsel galeriye eklendi.`);
-    }
-    event.target.value = '';
-  };
-
-  const handleMoveGalleryImage = (index: number, direction: -1 | 1) => {
-    const target = index + direction;
-    if (target < 0 || target >= draft.galleryImages.length) return;
-    const copy = [...draft.galleryImages];
-    const [item] = copy.splice(index, 1);
-    copy.splice(target, 0, item);
-    patchDraft('galleryImages', copy);
-  };
-
-  const handleRemoveGalleryImage = (index: number) => {
-    patchDraft(
-      'galleryImages',
-      draft.galleryImages.filter((_, idx) => idx !== index)
-    );
-  };
-
   const handleToggleColor = (color: MetalColor) => {
     const exists = draft.availableColors.includes(color);
     if (exists && draft.availableColors.length <= 1) return;
@@ -827,13 +839,8 @@ export function ProductEntityModal({
       }
       setFieldErrors(nextErrors);
       setServerError(`Lütfen formu kontrol edin: ${errorLabels.slice(0, 3).join(', ')}`);
-      const stoneKeys = new Set(['centerStoneCarat', 'sideStoneCarat', 'fireRatePct']);
       const firstKey = Object.keys(nextErrors)[0];
-      if (firstKey && stoneKeys.has(firstKey)) {
-        setActiveTab('tas-montur');
-      } else {
-        setActiveTab('genel');
-      }
+      setActiveTab(firstKey ? resolveTabForField(firstKey) : 'genel');
       return;
     }
 
@@ -848,7 +855,7 @@ export function ProductEntityModal({
       `${draft.title.trim()} (${draft.purityCode} ${draft.metalColor})`;
 
     const resolvedStatus: CatalogStatus =
-      targetStatus ?? draft.catalogStatus ?? (mode === 'create' ? 'DRAFT' : 'ACTIVE');
+      targetStatus ?? draft.catalogStatus ?? 'DRAFT';
 
     const selectedChannels = draft.salesChannels ?? [];
     const existingRules = draft.ledger.channelRules.filter((r) =>
@@ -891,14 +898,80 @@ export function ProductEntityModal({
 
     try {
       if (mode === 'create') {
-        const created = await createMutation.mutateAsync(payload);
+        // POST never creates ACTIVE directly; always create as DRAFT then run publish gate if requested.
+        const createPayload: ProductState = {
+          ...payload,
+          catalogStatus: 'DRAFT',
+        };
+        const created = await createMutation.mutateAsync(createPayload);
+        if (
+          pendingMatrix.purities.length > 0 &&
+          pendingMatrix.colors.length > 0 &&
+          pendingMatrix.sizes.length > 0
+        ) {
+          try {
+            await bulkVariantsMutation.mutateAsync({
+              parentSku: created.parentSku,
+              purities: pendingMatrix.purities,
+              colors: pendingMatrix.colors,
+              sizes: pendingMatrix.sizes,
+              centerStoneCarat: String(draft.centerStoneCarat ?? 0),
+              grossWeightGram: String(Math.max(0.01, Number(draft.grossWeightGram) || 3)),
+              initialStockQty: pendingMatrix.initialStockQty,
+            });
+          } catch {
+            // Non-blocking: default variant already exists
+          }
+        }
+        if (resolvedStatus === 'ACTIVE') {
+          try {
+            const pubRes = await publishMutation.mutateAsync(created.parentSku);
+            onSaved?.({ ...created, catalogStatus: pubRes.catalogStatus as CatalogStatus });
+            onOpenChange(false);
+          } catch (pubErr) {
+            onSaved?.(created);
+            setServerError(
+              `Ürün taslak olarak kaydedildi ancak yayınlanamadı: ${formatPublishError(pubErr)}`
+            );
+          }
+          return;
+        }
         onSaved?.(created);
         onOpenChange(false);
       } else if (initialProduct) {
+        const wasPublished = initialProduct.catalogStatus === 'ACTIVE';
+        const wantsPublish = resolvedStatus === 'ACTIVE' && !wasPublished;
+        const wantsUnpublish = resolvedStatus === 'DRAFT' && wasPublished;
+        const {
+          catalogStatus: _omittedStatus,
+          stockQty: _omittedStockQty,
+          ...patchBase
+        } = payload;
+        const patchPayload: Partial<ProductState> =
+          resolvedStatus === 'ACTIVE' || wantsUnpublish
+            ? patchBase
+            : { ...patchBase, catalogStatus: resolvedStatus };
         const updated = await updateMutation.mutateAsync({
           parentSku: initialProduct.parentSku,
-          patch: payload,
+          patch: patchPayload,
         });
+        if (wantsPublish) {
+          try {
+            const pubRes = await publishMutation.mutateAsync(initialProduct.parentSku);
+            onSaved?.({ ...updated, catalogStatus: pubRes.catalogStatus as CatalogStatus });
+            onOpenChange(false);
+          } catch (pubErr) {
+            onSaved?.(updated);
+            setServerError(formatPublishError(pubErr));
+          }
+          return;
+        }
+        if (wantsUnpublish) {
+          const unpubRes = await unpublishMutation.mutateAsync(initialProduct.parentSku);
+          onSaved?.({ ...updated, catalogStatus: unpubRes.catalogStatus as CatalogStatus });
+          onOpenChange(false);
+          return;
+        }
         onSaved?.(updated);
         onOpenChange(false);
       }
@@ -915,6 +988,10 @@ export function ProductEntityModal({
             mapped[field] = Array.isArray(msgs) ? msgs.join(', ') : String(msgs);
           }
           setFieldErrors((prev) => ({ ...prev, ...mapped }));
+          const firstApiField = Object.keys(mapped)[0];
+          if (firstApiField) {
+            setActiveTab(resolveTabForField(firstApiField));
+          }
         }
         setServerError(
           detailLines.length > 0 ? `${err.message} (${detailLines.join(' · ')})` : err.message
@@ -925,7 +1002,6 @@ export function ProductEntityModal({
     }
   };
 
-  const fallbackMedia = resolveProductMedia(draft.parentSku, draft.metalColor);
   const usedChannels = new Set(draft.ledger.channelRules.map((r) => r.channel));
   const hasB2bRule = usedChannels.has('B2B');
   const hasB2bApiRule = usedChannels.has('B2B_API');
@@ -957,7 +1033,7 @@ export function ProductEntityModal({
   };
   const isMountingKind = resolveProductKind(draft) === 'MOUNTING';
 
-  const currentStatus: CatalogStatus = draft.catalogStatus ?? (mode === 'create' ? 'DRAFT' : 'ACTIVE');
+  const currentStatus: CatalogStatus = draft.catalogStatus ?? 'DRAFT';
   const isPublished = currentStatus === 'ACTIVE';
 
   return (
@@ -1095,11 +1171,14 @@ export function ProductEntityModal({
         <div
           role="tablist"
           aria-label="Ürün düzenleme sekmeleri"
-          className="flex flex-wrap gap-1 p-1 bg-muted/60 border border-border rounded-lg"
+          className="flex overflow-x-auto sm:flex-wrap gap-1 p-1 bg-muted/60 border border-border rounded-lg"
         >
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
+            const hasTabError = Object.keys(fieldErrors).some(
+              (key) => resolveTabForField(key) === tab.id
+            );
             const countHint =
               tab.id === 'medya'
                 ? draft.galleryImages.length +
@@ -1120,7 +1199,7 @@ export function ProductEntityModal({
                 aria-selected={active}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  'h-auto px-2.5 py-2 rounded-md text-xs font-medium whitespace-nowrap gap-1.5',
+                  'h-auto px-2.5 py-2 rounded-md text-xs font-medium whitespace-nowrap gap-1.5 shrink-0',
                   active && 'bg-card text-foreground shadow-xs border border-border'
                 )}
               >
@@ -1128,6 +1207,9 @@ export function ProductEntityModal({
                 <span>{tab.label}</span>
                 {countHint !== null && countHint > 0 && (
                   <span className="font-mono text-[11px] text-muted-foreground">({countHint})</span>
+                )}
+                {hasTabError && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 shrink-0" title="Bu sekmede hata var" />
                 )}
               </Button>
             );
@@ -1760,6 +1842,8 @@ export function ProductEntityModal({
             purityOptions={purityOptions.map((o) => o.value)}
             colorOptions={colorOptions.map((o) => o.value)}
             mode={mode}
+            pendingMatrix={pendingMatrix}
+            onPendingMatrixChange={setPendingMatrix}
           />
         )}
 
@@ -1768,6 +1852,7 @@ export function ProductEntityModal({
             parentSku={draft.parentSku}
             mode={mode}
             catalogStockQty={draft.stockQty}
+            onInitialStockQtyChange={(qty) => patchDraft('stockQty', qty)}
             stockStatus={draft.stockStatus}
             onStockStatusChange={(v) =>
               patchDraft('stockStatus', v as 'Stokta' | 'Tükendi' | 'Siparişe Özel')
@@ -3041,491 +3126,41 @@ export function ProductEntityModal({
             TAB 4: GÖRSEL, VİDEO, 360° & MEDYA MATERYALLERİ
            =================================================================== */}
         {activeTab === 'medya' && (
-          <div className="space-y-5">
-            {/* Gallery Photos Section */}
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground">
-                    Ürün Fotoğrafları ve Galeri Sıralaması
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Bilgisayardan görsel yükleyin veya URL ekleyin. İlk sıradaki görsel vitrin ve katalog kapağı olarak kullanılır.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => void handleUploadFiles(e)}
-                    className="hidden"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-foreground text-white hover:bg-slate-800 font-medium cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    Bilgisayardan Görsel Yükle
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Input
-                  type="url"
-                  value={newImageUrl}
-                  onChange={(e) => setNewImageUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddGalleryUrl();
-                    }
-                  }}
-                  placeholder="https://cdn.taragold.com/urunler/SE009-main.jpg"
-                  className="flex-1 px-3 py-2 border border-input rounded-md bg-card text-foreground font-mono text-xs"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddGalleryUrl}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 font-medium whitespace-nowrap cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  URL Ekle
-                </button>
-              </div>
-
-              {mediaNotice && (
-                <p className="text-[11px] font-medium text-emerald-700">{mediaNotice}</p>
-              )}
-
-              {draft.galleryImages.length === 0 ? (
-                <div className="p-5 border border-dashed border-input rounded-lg bg-muted/50/70 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={fallbackMedia.mainUrl}
-                      alt={draft.title || 'Varsayılan şablon görseli'}
-                      referrerPolicy="no-referrer"
-                      className="w-14 h-14 rounded-md object-cover border border-border bg-card shrink-0"
-                    />
-                    <div>
-                      <div className="font-medium text-foreground">
-                        Özel galeri görseli henüz eklenmemiş
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Görsel eklediğinizde varsayılan stüdyo şablonunun yerine sizin fotoğraflarınız gösterilir.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="w-full sm:w-64 space-y-1">
-                    <Label className="text-[11px] font-medium text-muted-foreground block">
-                      Yedek Stüdyo Şablonu
-                    </Label>
-                    <select
-                      value={draft.visualType}
-                      onChange={(e) =>
-                        patchDraft('visualType', e.target.value as JewelryVisualType)
-                      }
-                      className="w-full px-2.5 py-1.5 border border-input rounded-md bg-card text-xs"
-                    >
-                      {VISUAL_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {draft.galleryImages.map((imgUrl, idx) => {
-                    const renderable = isRenderableMediaUrl(imgUrl);
-                    return (
-                      <div
-                        key={`${idx}-${imgUrl.slice(0, 32)}`}
-                        className="border border-border rounded-lg bg-card overflow-hidden flex flex-col"
-                      >
-                        <div className="aspect-[4/3] bg-muted relative overflow-hidden flex items-center justify-center">
-                          {renderable ? (
-                            <img
-                              src={imgUrl}
-                              alt={`Galeri görseli ${idx + 1}`}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="text-center p-4 text-muted-foreground">
-                              <ImageIcon className="w-6 h-6 mx-auto mb-1.5 text-muted-foreground" />
-                              <div className="font-mono text-[11px] break-all">{imgUrl}</div>
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="text-[11px] font-semibold text-foreground">
-                              {idx === 0 ? 'Ana Vitrin Görseli' : `Görsel #${idx + 1}`}
-                            </div>
-                            <div className="font-mono text-[10px] text-muted-foreground truncate">
-                              {imgUrl.startsWith('data:') ? 'Yerel Yüklenen Dosya' : imgUrl}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button
-                              type="button"
-                              disabled={idx === 0}
-                              onClick={() => handleMoveGalleryImage(idx, -1)}
-                              title="Yukarı taşı"
-                              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
-                            >
-                              <ArrowUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              disabled={idx === draft.galleryImages.length - 1}
-                              onClick={() => handleMoveGalleryImage(idx, 1)}
-                              title="Aşağı taşı"
-                              className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
-                            >
-                              <ArrowDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveGalleryImage(idx)}
-                              title="Görseli çıkar"
-                              data-delete="true"
-                              className="p-1 text-destructive hover:bg-destructive/10 cursor-pointer rounded-md"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Video, 360 Spin, Clean Catalog PNG & Certificate PDF */}
-            <div className="pt-4 border-t border-border space-y-3">
-              <div className="flex items-center gap-2">
-                <Film className="w-4 h-4 text-muted-foreground" />
-                <h3 className="text-sm font-semibold text-foreground">
-                  Video, 360° Görünüm ve Diğer Görsel Materyaller
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="font-medium block">
-                    Reels / Ürün Videosu URL (9:16 veya MP4)
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      type="text"
-                      value={draft.reelsVideoUrl}
-                      onChange={(e) => patchDraft('reelsVideoUrl', e.target.value)}
-                      placeholder="https://cdn.taragold.com/videos/SE009_reels.mp4"
-                      className="flex-1 px-3 py-2 font-mono border border-input rounded-md bg-card text-foreground"
-                    />
-                    {draft.reelsVideoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => patchDraft('reelsVideoUrl', '')}
-                        title="Videoyu kaldır"
-                        data-delete="true"
-                        className="p-2 border border-input rounded-md text-destructive hover:bg-destructive/10 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="font-medium block">
-                    360° Dönen Tabla Video / URL
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      type="text"
-                      value={draft.spin360Url}
-                      onChange={(e) => patchDraft('spin360Url', e.target.value)}
-                      placeholder="https://cdn.taragold.com/360/SE009_360.mp4"
-                      className="flex-1 px-3 py-2 font-mono border border-input rounded-md bg-card text-foreground"
-                    />
-                    {draft.spin360Url && (
-                      <button
-                        type="button"
-                        onClick={() => patchDraft('spin360Url', '')}
-                        title="360° materyali kaldır"
-                        data-delete="true"
-                        className="p-2 border border-input rounded-md text-destructive hover:bg-destructive/10 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="font-medium block">
-                    Filigransız Katalog Görseli (PNG / Beyaz Fon)
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      type="text"
-                      value={draft.catalogCleanImageUrl}
-                      onChange={(e) => patchDraft('catalogCleanImageUrl', e.target.value)}
-                      placeholder="https://cdn.taragold.com/clean/SE009_clean.png"
-                      className="flex-1 px-3 py-2 font-mono border border-input rounded-md bg-card text-foreground"
-                    />
-                    {draft.catalogCleanImageUrl && (
-                      <button
-                        type="button"
-                        onClick={() => patchDraft('catalogCleanImageUrl', '')}
-                        title="Temiz görseli kaldır"
-                        data-delete="true"
-                        className="p-2 border border-input rounded-md text-destructive hover:bg-destructive/10 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="font-medium block">
-                    Sertifika Dosyası (PDF URL)
-                  </Label>
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      type="text"
-                      value={draft.certificateFileUrl}
-                      onChange={(e) => patchDraft('certificateFileUrl', e.target.value)}
-                      placeholder="https://cdn.taragold.com/certs/GIA_2141234567.pdf"
-                      className="flex-1 px-3 py-2 font-mono border border-input rounded-md bg-card text-foreground"
-                    />
-                    {draft.certificateFileUrl && (
-                      <button
-                        type="button"
-                        onClick={() => patchDraft('certificateFileUrl', '')}
-                        title="Sertifika dosyasını kaldır"
-                        data-delete="true"
-                        className="p-2 border border-input rounded-md text-destructive hover:bg-destructive/10 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* B2B Media Sharing & Social Copy */}
-            <div className="pt-4 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="font-medium block">B2B Bayi Medya Paylaşım İzni</Label>
-                <Input
-                  type="text"
-                  value={draft.b2bSharePermission}
-                  onChange={(e) => patchDraft('b2bSharePermission', e.target.value)}
-                  
-                />
-                <Label className="inline-flex items-center gap-2 pt-1.5 font-medium cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.dynamicDealerWatermark}
-                    onChange={(e) => patchDraft('dynamicDealerWatermark', e.target.checked)}
-                    className="rounded border-input"
-                  />
-                  <span>Bayi paylaşımında dinamik logo / filigran uygula</span>
-                </Label>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-medium block">
-                  Sosyal Medya / WhatsApp Paylaşım Metni
-                </Label>
-                <textarea
-                  rows={3}
-                  value={draft.socialShareCaption}
-                  onChange={(e) => patchDraft('socialShareCaption', e.target.value)}
-                  placeholder="Bayilerin Instagram / WhatsApp paylaşımında kullanacağı hazır açıklama..."
-                  className={FIELD_TEXTAREA_CLASS}
-                />
-              </div>
-            </div>
-          </div>
+          <ProductMediaPanel
+            draft={draft}
+            colorOptions={colorOptions.map((o) => o.value)}
+            onSyncGallery={(entries) => {
+              setDraft((prev) => ({
+                ...prev,
+                mediaItems: entries,
+                galleryImages: entries.map((e) => e.url),
+              }));
+              setServerError(null);
+            }}
+            onPatchField={patchDraft}
+          />
         )}
 
         {/* ===================================================================
             TAB: SEO
            =================================================================== */}
         {activeTab === 'seo' && (
-          <div className="space-y-5">
-            <div className="p-4 border border-border rounded-lg bg-muted/50 space-y-1">
-              <div className="text-[11px] font-medium text-muted-foreground">
-                Arama Motoru (Google) Canlı Önizleme
-              </div>
-              <div className="text-xs text-emerald-800 font-mono truncate">
-                https://taragold.com.tr/urun/{draft.seoSlug || slugifyTurkish(draft.title || draft.parentSku)}
-              </div>
-              <div className="text-base font-medium text-blue-800 leading-snug">
-                {draft.metaTitle || draft.title || 'Ürün Meta Başlığı'}
-              </div>
-              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                {draft.description ||
-                  'Ürün açıklaması burada arama sonucu özeti (meta description) olarak görüntülenir.'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="font-medium">SEO URL Slug</Label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      patchDraft(
-                        'seoSlug',
-                        slugifyTurkish(`${draft.title || draft.parentSku}-${draft.purityCode}-${draft.metalColor}`)
-                      )
-                    }
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600 hover:text-foreground cursor-pointer"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    Başlıktan Üret
-                  </button>
-                </div>
-                <Input
-                  type="text"
-                  value={draft.seoSlug}
-                  onChange={(e) => patchDraft('seoSlug', e.target.value)}
-                  placeholder="0-60-karat-pirlanta-tektas-yuzuk-14k-beyaz"
-                  className={cn(FIELD_SELECT_CLASS, 'w-full font-mono')}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <Label className="font-medium">Meta Başlık (Title Tag)</Label>
-                  <span
-                    className={`font-mono text-[11px] ${
-                      draft.metaTitle.length > 65 ? 'text-warning' : 'text-muted-foreground'
-                    }`}
-                  >
-                    {draft.metaTitle.length} / 60 karakter
-                  </span>
-                </div>
-                <Input
-                  type="text"
-                  value={draft.metaTitle}
-                  onChange={(e) => patchDraft('metaTitle', e.target.value)}
-                  placeholder="0.60 Karat GIA Sertifikalı Pırlanta Tektaş Yüzük | Tara Gold"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="font-medium block">
-                  Pazaryeri / Google Shopping Kategorisi
-                </Label>
-                <Input
-                  type="text"
-                  value={draft.marketplaceCategory}
-                  onChange={(e) => patchDraft('marketplaceCategory', e.target.value)}
-                  placeholder="Takı & Mücevher > Pırlanta > Pırlanta Yüzük"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-medium block">Ölçü Rehberi URL</Label>
-                <Input
-                  type="text"
-                  value={draft.sizeGuideUrl}
-                  onChange={(e) => patchDraft('sizeGuideUrl', e.target.value)}
-                  placeholder="https://taragold.com.tr/olcu-rehberi"
-                  className={cn(FIELD_SELECT_CLASS, 'w-full font-mono')}
-                />
-              </div>
-            </div>
-          </div>
+          <ProductSeoPanel
+            draft={draft}
+            fieldErrors={fieldErrors}
+            onPatchField={patchDraft}
+          />
         )}
 
         {/* ===================================================================
             TAB: SATIŞ & GARANTİ
            =================================================================== */}
         {activeTab === 'satis' && (
-          <div className="space-y-5">
-            <p className="text-xs text-muted-foreground">
-              Satış sonrası politikalar. İleride kategori/marka varsayılanlarından override edilebilir;
-              şimdilik ürün kartı seviyesinde tutulur.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label className="font-medium block">Garanti Süresi (Ay)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={120}
-                  value={draft.warrantyMonths}
-                  onChange={(e) =>
-                    patchDraft('warrantyMonths', Math.max(0, Math.round(Number(e.target.value) || 0)))
-                  }
-                  className="text-right font-mono tabular-nums"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-medium block">Ömür Boyu Bakım</Label>
-                <Input
-                  type="text"
-                  value={draft.lifetimeMaintenance}
-                  onChange={(e) => patchDraft('lifetimeMaintenance', e.target.value)}
-                  placeholder="Evet (Ücretsiz)"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-medium block">Sigortalı Kargo Bilgisi</Label>
-                <Input
-                  type="text"
-                  value={draft.insuredShippingInfo}
-                  onChange={(e) => patchDraft('insuredShippingInfo', e.target.value)}
-                  placeholder="Tam sigortalı özel kurye"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="font-medium block">İade &amp; Değişim Politikası</Label>
-              <textarea
-                rows={3}
-                value={draft.returnPolicyText}
-                onChange={(e) => patchDraft('returnPolicyText', e.target.value)}
-                placeholder="14 gün içinde koşulsuz iade; kişiye özel yazı/ölçü yapılan ürünlerde cayma istisnası uygulanır."
-                className={FIELD_TEXTAREA_CLASS}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="font-medium block">Tedarikçi (katalog etiketi)</Label>
-              <Input
-                type="text"
-                value={draft.supplierName}
-                onChange={(e) => patchDraft('supplierName', e.target.value)}
-                placeholder="Tara Gold Atölye"
-              />
-              <p className="text-[10px] text-muted-foreground">
-                Fiziksel depo/tedarikçi stok satırında yaşar; bu alan ürün kartı etiketidir.
-              </p>
-            </div>
-          </div>
+          <ProductSalesWarrantyPanel
+            draft={draft}
+            fieldErrors={fieldErrors}
+            onPatchField={patchDraft}
+          />
         )}
 
         {serverError && (

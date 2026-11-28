@@ -268,7 +268,18 @@ export async function apiFetch<T>(
         message: `İstek başarısız oldu (${res.status})`,
       };
       try {
-        errPayload = (await res.json()) as ApiErrorPayload;
+        const rawErr = (await res.json()) as ApiErrorPayload & {
+          data?: ApiErrorPayload & { missing?: string[] };
+        };
+        if (rawErr.data && !rawErr.code && rawErr.data.code) {
+          errPayload = {
+            code: rawErr.data.code,
+            message: rawErr.data.message || errPayload.message,
+            details: rawErr.data.missing ? { missing: rawErr.data.missing } : rawErr.data.details,
+          };
+        } else {
+          errPayload = rawErr;
+        }
       } catch {
         // non-JSON HTTP error fallback
       }

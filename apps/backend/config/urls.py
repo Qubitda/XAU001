@@ -801,9 +801,21 @@ if getattr(django_settings, "ENABLE_IYZICO_PAYMENTS", False):
         ),
     ]
 
+from apps.catalog.api.media_serve import PublicCatalogMediaView
+
 urlpatterns += [
     path("api/v1/", include("apps.social_commerce.urls")),
+    path(
+        "media/catalog/<path:filename>",
+        PublicCatalogMediaView.as_view(prefix="catalog"),
+        name="public-catalog-media",
+    ),
+    path(
+        "media/definitions/<path:filename>",
+        PublicCatalogMediaView.as_view(prefix="definitions"),
+        name="public-definitions-media",
+    ),
 ]
 
 # Partner logos/documents are served only via authenticated OPS API endpoints.
-# Do not mount public /media/ static serving — that exposes uploaded files by URL.
+# Only public catalog/ and definitions/ media prefixes are mounted above.

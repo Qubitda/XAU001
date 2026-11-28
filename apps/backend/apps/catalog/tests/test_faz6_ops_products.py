@@ -243,3 +243,253 @@ class Faz6OpsProductsAndVariantsTests(TestCase):
 
         self.client.force_authenticate(user=None)
         self.assertEqual(self.client.get("/api/v1/storefront/products/F6-PUB-001").status_code, 404)
+
+    def test_patch_active_product_allows_field_updates_without_publish_error(self) -> None:
+        self.client.force_authenticate(user=self.ops_user)
+        self.client.post("/api/v1/ops/products", self._create_product_payload("F6-ACT-001"), format="json")
+        product = ProductModel.objects.get(parent_sku="F6-ACT-001")
+        product.catalog_status = ProductModel.CatalogStatus.ACTIVE
+        product.save(update_fields=["catalog_status"])
+
+        # Updating an already-ACTIVE product with catalogStatus='ACTIVE' in payload must succeed
+        res = self.client.patch(
+            "/api/v1/ops/products/F6-ACT-001",
+            {"title": "Güncel Aktif Ürün", "catalogStatus": "ACTIVE"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["data"]["title"], "Güncel Aktif Ürün")
+
+        # Transitioning DRAFT -> ACTIVE via PATCH must still require /publish
+        product.catalog_status = ProductModel.CatalogStatus.DRAFT
+        product.save(update_fields=["catalog_status"])
+        fail_res = self.client.patch(
+            "/api/v1/ops/products/F6-ACT-001",
+            {"catalogStatus": "ACTIVE"},
+            format="json",
+        )
+        self.assertEqual(fail_res.status_code, 400)
+        self.assertEqual(fail_res.json()["code"], "USE_PUBLISH_ENDPOINT")
+
+    def test_public_catalog_media_serving_and_traversal_guard(self) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.client.force_authenticate(user=self.ops_user)
+        upload = SimpleUploadedFile("ring.png", b"\x89PNG\r\n\x1a\nfake", content_type="image/png")
+        up_res = self.client.post(
+            "/api/v1/ops/catalog/media-upload",
+            {"file": upload, "kind": "image"},
+            format="multipart",
+        )
+        self.assertEqual(up_res.status_code, 201)
+        rel_path = up_res.json()["data"]["path"]
+        self.assertTrue(rel_path.startswith("/media/catalog/"))
+
+        # Anonymous storefront visitor can fetch uploaded catalog media with nosniff header
+        self.client.force_authenticate(user=None)
+        media_res = self.client.get(rel_path)
+        self.assertEqual(media_res.status_code, 200)
+        self.assertEqual(media_res["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(b"".join(media_res.streaming_content), b"\x89PNG\r\n\x1a\nfake")
+
+        # Traversal and private prefixes remain 404
+        self.assertEqual(self.client.get("/media/catalog/../settings.py").status_code, 404)
+        self.assertEqual(self.client.get("/media/organizations/secret.pdf").status_code, 404)
+
+    def test_create_cannot_force_active_and_unpublish_endpoint_works(self) -> None:
+        self.client.force_authenticate(user=self.ops_user)
+        payload = self._create_product_payload("F6-NOACT-001")
+        payload["catalogStatus"] = "ACTIVE"
+        res = self.client.post("/api/v1/ops/products", payload, format="json")
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.json()["code"], "USE_PUBLISH_ENDPOINT")
+
+        # Create as DRAFT with initial stockQty=5
+        payload["catalogStatus"] = "DRAFT"
+        payload["stockQty"] = 5
+        ok_res = self.client.post("/api/v1/ops/products", payload, format="json")
+        self.assertEqual(ok_res.status_code, 201)
+        self.assertEqual(ok_res.json()["data"]["catalogStatus"], "DRAFT")
+        self.assertEqual(ok_res.json()["data"]["stockQty"], 5)
+
+        # Unpublish endpoint transitions ACTIVE -> DRAFT
+        product = ProductModel.objects.get(parent_sku="F6-NOACT-001")
+        product.catalog_status = ProductModel.CatalogStatus.ACTIVE
+        product.save(update_fields=["catalog_status"])
+        unpub = self.client.post("/api/v1/ops/products/F6-NOACT-001/unpublish")
+        self.assertEqual(unpub.status_code, 200)
+        self.assertEqual(unpub.json()["data"]["catalogStatus"], "DRAFT")
+
+    def test_bulk_variant_matrix_and_safe_delete_or_deactivate(self) -> None:
+        self.client.force_authenticate(user=self.ops_user)
+        self.client.post("/api/v1/ops/products", self._create_product_payload("F6-MAT-001"), format="json")
+
+        bulk_res = self.client.post(
+            "/api/v1/ops/variants/bulk",
+            {
+                "parentSku": "F6-MAT-001",
+                "purities": ["14K", "18K"],
+                "colors": ["Beyaz", "Rose"],
+                "sizes": [14, 16],
+                "grossWeightGram": "4.20",
+                "initialStockQty": 0,
+            },
+            format="json",
+        )
+        self.assertEqual(bulk_res.status_code, 201)
+        self.assertEqual(bulk_res.json()["data"]["createdCount"], 8)
+
+        # Re-running same matrix skips duplicates
+        dup_res = self.client.post(
+            "/api/v1/ops/variants/bulk",
+            {
+                "parentSku": "F6-MAT-001",
+                "purities": ["14K"],
+                "colors": ["Beyaz"],
+                "sizes": [14],
+                "grossWeightGram": "4.20",
+            },
+            format="json",
+        )
+        self.assertEqual(dup_res.status_code, 201)
+        self.assertEqual(dup_res.json()["data"]["createdCount"], 0)
+        self.assertEqual(dup_res.json()["data"]["skippedCount"], 1)
+
+        # Variant without stock/order refs is physically deleted
+        self.client.force_authenticate(user=self.super_user)
+        v_id = bulk_res.json()["data"]["items"][0]["id"]
+        del_res = self.client.delete(f"/api/v1/ops/variants/{v_id}")
+        self.assertEqual(del_res.status_code, 200)
+        self.assertTrue(del_res.json()["data"]["deleted"])
+
+    def test_seo_warranty_and_color_media_roundtrip_and_blind_pool(self) -> None:
+        self.client.force_authenticate(user=self.ops_user)
+        payload = self._create_product_payload("F6-SEO-001")
+        payload.update(
+            {
+                "marketplaceCategory": "Takı > Yüzük",
+                "sizeGuideUrl": "https://cdn.example.com/size-guide",
+                "metaDescription": "Özel pırlanta yüzük açıklaması",
+                "ogImage": "https://cdn.example.com/og.jpg",
+                "canonicalUrl": "https://taradiamond.com.tr/urun/f6-seo-001",
+                "robots": "index,follow",
+                "keywords": "pırlanta, yüzük",
+                "lifetimeMaintenance": "Evet (Ücretsiz)",
+                "mediaItems": [
+                    {
+                        "url": "/media/catalog/sample-white.jpg",
+                        "metalColor": "Beyaz",
+                        "role": "GALLERY_MAIN",
+                        "sortOrder": 1,
+                    },
+                    {
+                        "url": "/media/catalog/sample-rose.jpg",
+                        "metalColor": "Rose",
+                        "role": "ON_HAND",
+                        "sortOrder": 2,
+                    },
+                ],
+            }
+        )
+        res = self.client.post("/api/v1/ops/products", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        d = res.json()["data"]
+        self.assertEqual(d["marketplaceCategory"], "Takı > Yüzük")
+        self.assertEqual(d["metaDescription"], "Özel pırlanta yüzük açıklaması")
+        self.assertEqual(d["lifetimeMaintenance"], "Evet (Ücretsiz)")
+        self.assertEqual(d["robots"], "index,follow")
+        self.assertEqual(len(d["mediaItems"]), 2)
+        self.assertEqual(d["mediaItems"][1]["metalColor"], "Rose")
+
+        # Make active with published recipe + B2C_API channel and verify blind-pool on storefront
+        product = ProductModel.objects.get(parent_sku="F6-SEO-001")
+        product.sales_channels = ["B2C_API"]
+        product.catalog_status = ProductModel.CatalogStatus.ACTIVE
+        product.save(update_fields=["sales_channels", "catalog_status"])
+        PricingRecipe.objects.filter(product=product).update(status=PricingRecipe.Status.PUBLISHED)
+        self.client.force_authenticate(user=None)
+        sf = self.client.get("/api/v1/storefront/products/F6-SEO-001")
+        self.assertEqual(sf.status_code, 200)
+        sf_data = sf.json()["data"]
+        self.assertNotIn("stockQty", sf_data)
+        self.assertNotIn("ownerOrganizationId", sf_data)
+        self.assertNotIn("erpCode", sf_data)
+        self.assertEqual(sf_data["metaDescription"], "Özel pırlanta yüzük açıklaması")
+
+    def test_partial_patch_preserves_omitted_fields_and_recipe_versioning(self) -> None:
+        self.client.force_authenticate(user=self.ops_user)
+        payload = self._create_product_payload("F6-PATCH-001")
+        payload.update(
+            {
+                "metaDescription": "Korunması gereken meta açıklama",
+                "lifetimeMaintenance": "Ömür boyu ücretsiz bakım",
+                "mediaItems": [
+                    {"url": "/media/catalog/keep.jpg", "metalColor": "Beyaz", "role": "GALLERY_MAIN", "sortOrder": 1}
+                ],
+            }
+        )
+        self.client.post("/api/v1/ops/products", payload, format="json")
+        product = ProductModel.objects.get(parent_sku="F6-PATCH-001")
+        PricingRecipe.objects.filter(product=product).update(status=PricingRecipe.Status.PUBLISHED)
+        product.catalog_status = ProductModel.CatalogStatus.ACTIVE
+        product.save(update_fields=["catalog_status"])
+
+        # Partial PATCH only changing title must preserve SEO, warranty, media, and keep PUBLISHED recipe intact
+        res = self.client.patch(
+            "/api/v1/ops/products/F6-PATCH-001",
+            {"title": "Kısmi Güncellenmiş Başlık"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        d = res.json()["data"]
+        self.assertEqual(d["title"], "Kısmi Güncellenmiş Başlık")
+        self.assertEqual(d["metaDescription"], "Korunması gereken meta açıklama")
+        self.assertEqual(d["lifetimeMaintenance"], "Ömür boyu ücretsiz bakım")
+        self.assertEqual(len(d["mediaItems"]), 1)
+        self.assertTrue(PricingRecipe.objects.filter(product=product, status=PricingRecipe.Status.PUBLISHED).exists())
+
+    def test_publish_unpublish_permissions_and_idempotent_stock_movement(self) -> None:
+        from apps.accounts.models import User
+        from apps.inventory.models import Warehouse
+
+        self.client.force_authenticate(user=self.ops_user)
+        payload = self._create_product_payload("F6-PERM-001")
+        payload["stockQty"] = 2
+        self.client.post("/api/v1/ops/products", payload, format="json")
+
+        # Unauthenticated / non-OPS user cannot publish or unpublish
+        b2c_user = User.objects.create_user(email="b2c-audit@taragold.com", password="pass")
+        self.client.force_authenticate(user=b2c_user)
+        self.assertEqual(self.client.post("/api/v1/ops/products/F6-PERM-001/publish").status_code, 403)
+        self.assertEqual(self.client.post("/api/v1/ops/products/F6-PERM-001/unpublish").status_code, 403)
+
+        # Idempotent stock movement: duplicate referenceNo does not double-count
+        self.client.force_authenticate(user=self.super_user)
+        wh = Warehouse.objects.filter(is_active=True).first()
+        variant = ProductModel.objects.get(parent_sku="F6-PERM-001").variants.first()
+        mv1 = self.client.post(
+            "/api/v1/ops/stock-movements",
+            {
+                "variantId": str(variant.id),
+                "warehouseId": str(wh.id),
+                "movementType": "INBOUND",
+                "quantity": 3,
+                "referenceNo": "IDEMP-AUDIT-001",
+            },
+            format="json",
+        )
+        self.assertEqual(mv1.status_code, 201)
+        mv2 = self.client.post(
+            "/api/v1/ops/stock-movements",
+            {
+                "variantId": str(variant.id),
+                "warehouseId": str(wh.id),
+                "movementType": "INBOUND",
+                "quantity": 3,
+                "referenceNo": "IDEMP-AUDIT-001",
+            },
+            format="json",
+        )
+        self.assertEqual(mv2.status_code, 201)
+        variant.refresh_from_db()
+        self.assertEqual(variant.stock_qty, 5)

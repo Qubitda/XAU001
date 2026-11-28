@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Layers, Plus } from 'lucide-react';
+import { Grid3X3, Layers, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button, Input, Label } from '../../../components/ui';
 import { ApiClientError } from '../../../lib/api/client';
 import {
+  useBulkCreateOpsVariantsMutation,
   useCreateOpsVariantMutation,
   useDeactivateOpsVariantMutation,
   useOpsVariantsQuery,
@@ -24,8 +25,16 @@ type VariantFormState = {
   size: number;
   centerStoneCarat: string;
   grossWeightGram: string;
+  initialStockQty: number;
   isDefault: boolean;
 };
+
+export interface PendingMatrixConfig {
+  purities: string[];
+  colors: string[];
+  sizes: number[];
+  initialStockQty: number;
+}
 
 function emptyForm(product: ProductState): VariantFormState {
   const suffix = `${product.metalColor?.slice(0, 1) ?? 'X'}${product.variantSize || 14}`;
@@ -34,8 +43,9 @@ function emptyForm(product: ProductState): VariantFormState {
     purityCode: product.purityCode || '14K',
     metalColor: product.metalColor || 'Beyaz',
     size: product.variantSize || 14,
-    centerStoneCarat: String(product.centerStoneCarat ?? 0.3),
-    grossWeightGram: String(product.grossWeightGram || 4),
+    centerStoneCarat: String(product.centerStoneCarat ?? 0),
+    grossWeightGram: String(product.grossWeightGram || 3),
+    initialStockQty: 0,
     isDefault: false,
   };
 }
@@ -48,6 +58,7 @@ function formFromVariant(v: OpsVariant): VariantFormState {
     size: v.size,
     centerStoneCarat: v.centerStoneCarat,
     grossWeightGram: v.grossWeightGram,
+    initialStockQty: v.stockQty,
     isDefault: v.isDefault,
   };
 }
@@ -58,27 +69,91 @@ export function ProductVariantsPanel({
   purityOptions,
   colorOptions,
   mode,
+  pendingMatrix,
+  onPendingMatrixChange,
 }: {
   product: ProductState;
   productKind: ProductKind;
   purityOptions: string[];
   colorOptions: string[];
   mode: 'create' | 'edit';
+  pendingMatrix?: PendingMatrixConfig;
+  onPendingMatrixChange?: (next: PendingMatrixConfig) => void;
 }) {
   const parentSku = product.parentSku?.trim().toUpperCase() ?? '';
   const canManage = mode === 'edit' && Boolean(parentSku);
+  const [showInactive, setShowInactive] = useState(false);
+
   const variantsQuery = useOpsVariantsQuery(
-    { parentSku, pageSize: 100 },
+    { parentSku, pageSize: 100, ...(showInactive ? {} : { isActive: true }) },
     canManage
   );
   const createMutation = useCreateOpsVariantMutation();
   const patchMutation = usePatchOpsVariantMutation();
   const deactivateMutation = useDeactivateOpsVariantMutation();
+  const bulkMutation = useBulkCreateOpsVariantsMutation();
 
   const [showForm, setShowForm] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<VariantFormState>(() => emptyForm(product));
   const [error, setError] = useState<string | null>(null);
+
+  // Matrix state (used directly in edit mode, or synced to pendingMatrix in create mode)
+  const availableColorList = useMemo(
+    () => (colorOptions.length ? colorOptions : ['Beyaz', 'Sarı', 'Rose']),
+    [colorOptions]
+  );
+  const availablePurityList = useMemo(
+    () => (purityOptions.length ? purityOptions : ['14K', '18K', '22K']),
+    [purityOptions]
+  );
+
+  const [matrixPurities, setMatrixPurities] = useState<string[]>(() =>
+    pendingMatrix?.purities.length ? pendingMatrix.purities : product.purityCode ? [product.purityCode] : ['14K']
+  );
+  const [matrixColors, setMatrixColors] = useState<string[]>(() =>
+    pendingMatrix?.colors.length
+      ? pendingMatrix.colors
+      : product.availableColors?.length
+        ? product.availableColors
+        : product.metalColor
+          ? [product.metalColor]
+          : ['Beyaz']
+  );
+  const [matrixSizesText, setMatrixSizesText] = useState<string>(() =>
+    (pendingMatrix?.sizes.length
+      ? pendingMatrix.sizes
+      : product.availableSizes?.length
+        ? product.availableSizes
+        : [product.variantSize || 14]
+    ).join(', ')
+  );
+  const [matrixInitialStock, setMatrixInitialStock] = useState<number>(
+    pendingMatrix?.initialStockQty ?? 0
+  );
+
+  const parsedMatrixSizes = useMemo(() => {
+    const nums = matrixSizesText
+      .split(/[,\s]+/)
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 70);
+    return Array.from(new Set(nums)).sort((a, b) => a - b);
+  }, [matrixSizesText]);
+
+  const syncPendingMatrix = (
+    nextPurities: string[],
+    nextColors: string[],
+    nextSizes: number[],
+    nextStock: number
+  ) => {
+    onPendingMatrixChange?.({
+      purities: nextPurities,
+      colors: nextColors,
+      sizes: nextSizes,
+      initialStockQty: nextStock,
+    });
+  };
 
   const rows = variantsQuery.data?.items ?? [];
   const showSize = productKind !== 'LOOSE_STONE';
@@ -95,6 +170,7 @@ export function ProductVariantsPanel({
     setEditingId(null);
     setForm(emptyForm(product));
     setError(null);
+    setShowMatrix(false);
     setShowForm(true);
   };
 
@@ -102,6 +178,7 @@ export function ProductVariantsPanel({
     setEditingId(v.id);
     setForm(formFromVariant(v));
     setError(null);
+    setShowMatrix(false);
     setShowForm(true);
   };
 
@@ -134,7 +211,7 @@ export function ProductVariantsPanel({
           size: form.size,
           centerStoneCarat: normalizedCarat,
           grossWeightGram: normalizedWeight,
-          initialStockQty: 0,
+          initialStockQty: Math.max(0, Math.round(form.initialStockQty || 0)),
           isDefault: form.isDefault,
           isActive: true,
         });
@@ -154,28 +231,211 @@ export function ProductVariantsPanel({
     }
   };
 
-  const handleToggleActive = async (v: OpsVariant) => {
+  const handleDeleteOrDeactivate = async (v: OpsVariant) => {
     setError(null);
     try {
-      if (v.isActive) {
-        await deactivateMutation.mutateAsync(v.id);
+      const res = await deactivateMutation.mutateAsync(v.id);
+      if (res.deleted) {
+        toast.success(`${v.sku} varyantı silindi.`);
       } else {
-        await patchMutation.mutateAsync({ variantId: v.id, body: { isActive: true } });
+        toast.success(`${v.sku} stok/sipariş kaydı bulunduğu için pasifleştirildi.`);
       }
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : 'Durum güncellenemedi.');
+      const msg = err instanceof ApiClientError ? err.message : 'İşlem başarısız oldu.';
+      setError(msg);
+      toast.error(msg);
     }
   };
 
+  const handleActivate = async (v: OpsVariant) => {
+    setError(null);
+    try {
+      await patchMutation.mutateAsync({ variantId: v.id, body: { isActive: true } });
+      toast.success(`${v.sku} aktifleştirildi.`);
+    } catch (err) {
+      const msg = err instanceof ApiClientError ? err.message : 'Durum güncellenemedi.';
+      setError(msg);
+    }
+  };
+
+  const handleBulkMatrixCreate = async () => {
+    if (!canManage) return;
+    setError(null);
+    if (matrixPurities.length === 0 || matrixColors.length === 0 || parsedMatrixSizes.length === 0) {
+      setError('Matris için en az bir ayar, bir renk ve geçerli bir ölçü girin.');
+      return;
+    }
+    try {
+      const res = await bulkMutation.mutateAsync({
+        parentSku,
+        purities: matrixPurities,
+        colors: matrixColors,
+        sizes: parsedMatrixSizes,
+        centerStoneCarat: String(product.centerStoneCarat ?? 0),
+        grossWeightGram: String(Math.max(0.01, Number(product.grossWeightGram) || 3)),
+        initialStockQty: Math.max(0, Math.round(matrixInitialStock || 0)),
+      });
+      toast.success(
+        `${res.createdCount} varyant oluşturuldu${res.skippedCount > 0 ? ` (${res.skippedCount} mevcut atlandı)` : ''}.`
+      );
+      setShowMatrix(false);
+    } catch (err) {
+      const msg = err instanceof ApiClientError ? err.message : 'Matris üretimi başarısız oldu.';
+      setError(msg);
+      toast.error(msg);
+    }
+  };
+
+  const toggleItem = (list: string[], val: string) =>
+    list.includes(val) ? list.filter((x) => x !== val) : [...list, val];
+
+  const matrixBuilderBlock = (
+    <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-xs font-semibold text-foreground">Matristen Toplu Varyant Üret</div>
+          <p className="text-[11px] text-muted-foreground">
+            Seçtiğiniz ayar × renk × ölçü kombinasyonları gerçek <span className="font-mono">ProductVariant</span> kayıtlarına dönüştürülür.
+          </p>
+        </div>
+        <span className="text-[11px] font-mono text-foreground">
+          {matrixPurities.length * matrixColors.length * Math.max(1, parsedMatrixSizes.length)} kombinasyon
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-[11px]">Maden Ayarları</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {availablePurityList.map((p) => {
+              const active = matrixPurities.includes(p);
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    const next = toggleItem(matrixPurities, p);
+                    setMatrixPurities(next);
+                    syncPendingMatrix(next, matrixColors, parsedMatrixSizes, matrixInitialStock);
+                  }}
+                  className={cn(
+                    'px-2.5 py-1 rounded border text-[11px] font-mono cursor-pointer',
+                    active
+                      ? 'bg-foreground text-white border-foreground'
+                      : 'bg-background text-foreground border-input hover:bg-muted'
+                  )}
+                >
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-[11px]">Maden Renkleri</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {availableColorList.map((c) => {
+              const active = matrixColors.includes(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => {
+                    const next = toggleItem(matrixColors, c);
+                    setMatrixColors(next);
+                    syncPendingMatrix(matrixPurities, next, parsedMatrixSizes, matrixInitialStock);
+                  }}
+                  className={cn(
+                    'px-2.5 py-1 rounded border text-[11px] cursor-pointer',
+                    active
+                      ? 'bg-foreground text-white border-foreground'
+                      : 'bg-background text-foreground border-input hover:bg-muted'
+                  )}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px]">Ölçüler (virgülle ayırın, örn. 12, 14, 16)</Label>
+          <Input
+            type="text"
+            value={matrixSizesText}
+            onChange={(e) => {
+              const val = e.target.value;
+              setMatrixSizesText(val);
+              const parsed = val
+                .split(/[,\s]+/)
+                .map((s) => Number(s.trim()))
+                .filter((n) => Number.isInteger(n) && n >= 0 && n <= 70);
+              syncPendingMatrix(
+                matrixPurities,
+                matrixColors,
+                Array.from(new Set(parsed)).sort((a, b) => a - b),
+                matrixInitialStock
+              );
+            }}
+            placeholder="12, 14, 16"
+            className="font-mono text-xs"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px]">Varyant Başına Başlangıç Stoğu</Label>
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={matrixInitialStock}
+            onChange={(e) => {
+              const qty = Math.max(0, Math.round(Number(e.target.value) || 0));
+              setMatrixInitialStock(qty);
+              syncPendingMatrix(matrixPurities, matrixColors, parsedMatrixSizes, qty);
+            }}
+            className="font-mono text-right"
+          />
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" size="sm" onClick={() => setShowMatrix(false)}>
+            Kapat
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={bulkMutation.isPending}
+            onClick={() => void handleBulkMatrixCreate()}
+          >
+            <Grid3X3 className="w-3.5 h-3.5" />
+            {bulkMutation.isPending ? 'Üretiliyor...' : 'Kombinasyonları Üret'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   if (!canManage) {
     return (
-      <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-8 text-center space-y-2">
-        <Layers className="w-5 h-5 mx-auto text-muted-foreground" />
-        <p className="text-sm font-medium text-foreground">Varyantlar ürün kaydından sonra yönetilir</p>
-        <p className="text-xs text-muted-foreground max-w-md mx-auto">
-          Önce ürün kartını oluşturun. Satılabilir seçenekler (renk, ayar, ölçü, karat) ayrı{' '}
-          <span className="font-mono">ProductVariant</span> kayıtlarıdır; stok bu sekmede yazılmaz.
-        </p>
+      <div className="space-y-4">
+        <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-4 flex items-start gap-3">
+          <Layers className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-semibold text-foreground">
+              Oluşturma Aşamasında Varyant Matrisi
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Aşağıda seçtiğiniz renk, ayar ve ölçüler ürün kaydedildiğinde otomatik olarak gerçek{' '}
+              <span className="font-mono">ProductVariant</span> kayıtlarına dönüştürülür.
+            </p>
+          </div>
+        </div>
+        {matrixBuilderBlock}
       </div>
     );
   }
@@ -189,14 +449,36 @@ export function ProductVariantsPanel({
             <span className="ml-2 font-mono text-xs text-muted-foreground">({rows.length})</span>
           </h3>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Bu ürünün satılabilir seçenekleri. Stok miktarı Stok &amp; Depo sekmesinde; fiyat Fiyatlandırma
-            motorundan üretilir.
+            Satılabilir seçenekler (renk, ayar, ölçü, karat). Stok miktarı Stok &amp; Depo sekmesinden veya yeni varyantta başlangıç stoğu olarak yönetilir.
           </p>
         </div>
-        <Button type="button" size="sm" variant="success" onClick={openCreate}>
-          <Plus className="w-3.5 h-3.5" />
-          Yeni varyant ekle
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer mr-1">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              className="rounded border-input"
+            />
+            Pasifleri göster
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setShowForm(false);
+              setShowMatrix((v) => !v);
+            }}
+          >
+            <Grid3X3 className="w-3.5 h-3.5" />
+            Matristen Üret
+          </Button>
+          <Button type="button" size="sm" variant="success" onClick={openCreate}>
+            <Plus className="w-3.5 h-3.5" />
+            Yeni varyant ekle
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -205,7 +487,9 @@ export function ProductVariantsPanel({
         </div>
       )}
 
-      <div className="border border-border rounded-lg overflow-hidden">
+      {showMatrix && matrixBuilderBlock}
+
+      <div className="border border-border rounded-lg overflow-x-auto">
         <table className="w-full text-left border-collapse text-xs">
           <thead className="bg-muted/60 text-muted-foreground">
             <tr>
@@ -231,7 +515,7 @@ export function ProductVariantsPanel({
             {!variantsQuery.isLoading && rows.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
-                  Henüz varyant yok. Katalog ipuçları: {(catalogHints.colors as string[]).join(', ') || '—'}
+                  Aktif varyant yok. Katalog ipuçları: {(catalogHints.colors as string[]).join(', ') || '—'}
                 </td>
               </tr>
             )}
@@ -283,13 +567,30 @@ export function ProductVariantsPanel({
                     >
                       Düzenle
                     </button>
-                    <button
-                      type="button"
-                      className="text-[11px] font-medium text-zinc-700 hover:text-foreground cursor-pointer"
-                      onClick={() => void handleToggleActive(v)}
-                    >
-                      {v.isActive ? 'Pasifleştir' : 'Aktifleştir'}
-                    </button>
+                    {v.isActive ? (
+                      <button
+                        type="button"
+                        disabled={v.isDefault || deactivateMutation.isPending}
+                        title={
+                          v.isDefault
+                            ? 'Varsayılan varyant silinemez/pasifleştirilemez'
+                            : 'Stok/sipariş yoksa silinir, varsa pasifleştirilir'
+                        }
+                        className="inline-flex items-center gap-0.5 text-[11px] font-medium text-destructive hover:underline disabled:opacity-40 cursor-pointer"
+                        onClick={() => void handleDeleteOrDeactivate(v)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Sil / Pasifleştir
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-emerald-700 hover:underline cursor-pointer"
+                        onClick={() => void handleActivate(v)}
+                      >
+                        Aktifleştir
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -298,7 +599,7 @@ export function ProductVariantsPanel({
         </table>
       </div>
       <p className="text-[10px] text-muted-foreground">
-        * Stok sütunu WarehouseStock aggregate özetidir; yazma Stok &amp; Depo sekmesinden yapılır.
+        * Stok sütunu WarehouseStock aggregate özetidir; stok giriş/çıkışı Stok &amp; Depo sekmesinden yapılır.
       </p>
 
       {showForm && (
@@ -322,7 +623,7 @@ export function ProductVariantsPanel({
                 value={form.metalColor}
                 onChange={(e) => setForm((f) => ({ ...f, metalColor: e.target.value }))}
               >
-                {(colorOptions.length ? colorOptions : ['Beyaz', 'Sarı', 'Rose']).map((c) => (
+                {availableColorList.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
@@ -336,12 +637,7 @@ export function ProductVariantsPanel({
                 value={form.purityCode}
                 onChange={(e) => setForm((f) => ({ ...f, purityCode: e.target.value }))}
               >
-                {purityOptions.length === 0 ? (
-                  <option value={form.purityCode || ''}>
-                    Tanım tablosunda aktif kayıt bulunamadı
-                  </option>
-                ) : null}
-                {purityOptions.map((p) => (
+                {availablePurityList.map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>
@@ -377,7 +673,7 @@ export function ProductVariantsPanel({
               </div>
             )}
             <div className="space-y-1">
-              <Label className="text-[11px]">Katalog gramaj (tahmini)</Label>
+              <Label className="text-[11px]">Katalog gramaj (gr)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -387,6 +683,24 @@ export function ProductVariantsPanel({
                 onChange={(e) => setForm((f) => ({ ...f, grossWeightGram: e.target.value }))}
               />
             </div>
+            {!editingId && (
+              <div className="space-y-1">
+                <Label className="text-[11px]">Başlangıç Stoğu (Adet)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="font-mono text-right"
+                  value={form.initialStockQty}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      initialStockQty: Math.max(0, Math.round(Number(e.target.value) || 0)),
+                    }))
+                  }
+                />
+              </div>
+            )}
           </div>
           <Label className="inline-flex items-center gap-2 cursor-pointer">
             <input

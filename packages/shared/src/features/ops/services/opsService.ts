@@ -207,11 +207,43 @@ export const opsService = {
     });
     return res.data;
   },
-  async deactivateVariant(variantId: string): Promise<{ id: string; sku: string; isActive: boolean }> {
-    const res = await apiFetch<{ id: string; sku: string; isActive: boolean }>(
+  async deactivateVariant(
+    variantId: string
+  ): Promise<{ id: string; sku: string; isActive: boolean; deleted?: boolean }> {
+    const res = await apiFetch<{ id: string; sku: string; isActive: boolean; deleted?: boolean }>(
       `/api/v1/ops/variants/${encodeURIComponent(variantId)}`,
       { method: 'DELETE' }
     );
+    return res.data;
+  },
+  async bulkCreateVariants(body: {
+    parentSku: string;
+    purities: string[];
+    colors: string[];
+    sizes: number[];
+    centerStoneCarat?: string;
+    grossWeightGram: string;
+    initialStockQty?: number;
+  }): Promise<{ createdCount: number; skippedCount: number; items: OpsVariant[] }> {
+    const res = await apiFetch<{ createdCount: number; skippedCount: number; items: OpsVariant[] }>(
+      '/api/v1/ops/variants/bulk',
+      { method: 'POST', body }
+    );
+    return res.data;
+  },
+  async createStockMovement(body: {
+    variantId?: string;
+    variantSku?: string;
+    warehouseId?: string;
+    warehouseCode?: string;
+    movementType: 'INBOUND' | 'SHIP' | 'RESERVE' | 'RELEASE';
+    quantity: number;
+    referenceNo: string;
+  }): Promise<OpsStockMovement> {
+    const res = await apiFetch<OpsStockMovement>('/api/v1/ops/stock-movements', {
+      method: 'POST',
+      body,
+    });
     return res.data;
   },
   async transferStock(body: OpsStockTransferInput): Promise<unknown> {

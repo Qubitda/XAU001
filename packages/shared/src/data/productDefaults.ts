@@ -141,6 +141,7 @@ export function createBlankProduct(overrides: Partial<ProductState> = {}): Produ
     isResizable: false,
     sizeGuideUrl: '',
     galleryImages: [],
+    mediaItems: [],
     reelsVideoUrl: '',
     spin360Url: '',
     catalogCleanImageUrl: '',
@@ -154,7 +155,12 @@ export function createBlankProduct(overrides: Partial<ProductState> = {}): Produ
     returnPolicyText: '',
     seoSlug: '',
     metaTitle: '',
+    metaDescription: '',
     marketplaceCategory: '',
+    ogImage: '',
+    canonicalUrl: '',
+    robots: 'index,follow',
+    keywords: '',
     ...overrides,
   };
 }

@@ -203,30 +203,59 @@ def _sync_product_media(
     product: ProductModel,
     *,
     gallery_images: list[str] | None = None,
+    media_items: list[dict] | None = None,
     reels_video_url: str | None = None,
     spin_360_url: str | None = None,
+    catalog_clean_image_url: str | None = None,
     certificate_file_url: str | None = None,
 ) -> None:
     def _is_http_url(val: str) -> bool:
         cleaned = (val or "").strip()
         if not cleaned:
             return False
-        if len(cleaned) > 500 or not cleaned.startswith("https://"):
+        is_valid = (
+            cleaned.startswith("https://")
+            or cleaned.startswith("/media/")
+            or cleaned.startswith("http://localhost")
+            or cleaned.startswith("http://127.0.0.1")
+        )
+        if len(cleaned) > 500 or not is_valid:
             raise DomainError(
-                "Medya URL'si yalnızca geçerli bir https:// adresi olabilir.",
+                "Medya URL'si geçerli bir https:// adresi veya /media/ yolu olmalıdır.",
                 code="INVALID_MEDIA_URL",
                 status_code=400,
             )
         return True
 
-    if gallery_images is not None:
+    gallery_roles = [
+        ProductMedia.MediaRole.GALLERY_MAIN,
+        ProductMedia.MediaRole.GALLERY,
+        ProductMedia.MediaRole.ON_HAND,
+        ProductMedia.MediaRole.MACRO,
+        ProductMedia.MediaRole.DETAIL,
+    ]
+    if media_items is not None:
+        ProductMedia.objects.filter(product=product, role__in=gallery_roles).delete()
+        for idx, item in enumerate(media_items, start=1):
+            url = (item.get("url") or "").strip()
+            if not _is_http_url(url):
+                continue
+            role = str(item.get("role") or (ProductMedia.MediaRole.GALLERY_MAIN if idx == 1 else ProductMedia.MediaRole.GALLERY)).upper()
+            if role not in gallery_roles:
+                continue
+            metal_color = (item.get("metalColor") or product.metal_color or "Beyaz").strip()[:24]
+            sort_order = int(item.get("sortOrder") or idx)
+            ProductMedia.objects.create(
+                product=product,
+                metal_color=metal_color,
+                role=role,
+                url=url,
+                sort_order=sort_order,
+            )
+    elif gallery_images is not None:
         ProductMedia.objects.filter(
             product=product,
-            role__in=[
-                ProductMedia.MediaRole.GALLERY_MAIN,
-                ProductMedia.MediaRole.ON_HAND,
-                ProductMedia.MediaRole.MACRO,
-            ],
+            role__in=gallery_roles,
         ).delete()
         roles = [
             ProductMedia.MediaRole.GALLERY_MAIN,
@@ -237,7 +266,7 @@ def _sync_product_media(
             url = (raw_url or "").strip()
             if not _is_http_url(url):
                 continue
-            role = roles[idx - 1] if idx <= len(roles) else ProductMedia.MediaRole.GALLERY_MAIN
+            role = roles[idx - 1] if idx <= len(roles) else ProductMedia.MediaRole.GALLERY
             ProductMedia.objects.create(
                 product=product,
                 metal_color=product.metal_color,
@@ -250,6 +279,7 @@ def _sync_product_media(
         (reels_video_url, ProductMedia.MediaRole.VIDEO_REELS, 10),
         (spin_360_url, ProductMedia.MediaRole.SPIN_360, 11),
         (certificate_file_url, ProductMedia.MediaRole.CERTIFICATE_PDF, 12),
+        (catalog_clean_image_url, ProductMedia.MediaRole.CATALOG_CLEAN, 13),
     ]
     for raw_val, media_role, order_no in single_role_updates:
         if raw_val is None:

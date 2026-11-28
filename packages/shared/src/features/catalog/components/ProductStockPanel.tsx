@@ -1,16 +1,26 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, Package } from 'lucide-react';
-import { Button } from '../../../components/ui';
+import { ArrowDownCircle, ArrowUpCircle, ArrowUpRight, Loader2, Package } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button, Input, Label } from '../../../components/ui';
+import { ApiClientError } from '../../../lib/api/client';
 import {
+  useCreateStockMovementMutation,
   useOpsStockMovementsQuery,
   useOpsStocksQuery,
+  useOpsVariantsQuery,
+  useOpsWarehousesQuery,
 } from '../../ops/hooks/useOpsQueries';
 import { formatTrNumber } from '../../../utils/pricingEngine';
+
+const FIELD_SELECT_CLASS =
+  'flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1';
 
 export function ProductStockPanel({
   parentSku,
   mode,
   catalogStockQty,
+  onInitialStockQtyChange,
   stockStatus,
   onStockStatusChange,
   leadTimeDays,
@@ -23,6 +33,7 @@ export function ProductStockPanel({
   parentSku: string;
   mode: 'create' | 'edit';
   catalogStockQty: number;
+  onInitialStockQtyChange?: (qty: number) => void;
   stockStatus: string;
   onStockStatusChange: (v: string) => void;
   leadTimeDays: number;
@@ -35,16 +46,67 @@ export function ProductStockPanel({
   const sku = parentSku.trim().toUpperCase();
   const canLoad = mode === 'edit' && Boolean(sku);
   const stocksQuery = useOpsStocksQuery({ parentSku: sku, pageSize: 100 }, canLoad);
+  const variantsQuery = useOpsVariantsQuery({ parentSku: sku, pageSize: 100, isActive: true }, canLoad);
+  const warehousesQuery = useOpsWarehousesQuery({ isActive: true, pageSize: 100 });
   const movementsQuery = useOpsStockMovementsQuery(
     canLoad ? { parentSku: sku, pageSize: 20 } : { pageSize: 1 },
     canLoad
   );
+  const movementMutation = useCreateStockMovementMutation();
 
   const stocks = canLoad ? (stocksQuery.data?.items ?? []) : [];
+  const variants = canLoad ? (variantsQuery.data?.items ?? []) : [];
+  const warehouses = warehousesQuery.data?.items ?? [];
   const movements = canLoad ? (movementsQuery.data?.items ?? []) : [];
 
-  const FIELD_SELECT_CLASS =
-    'flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1';
+  const [selectedVariantId, setSelectedVariantId] = useState('');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
+  const [movementType, setMovementType] = useState<'INBOUND' | 'SHIP'>('INBOUND');
+  const [moveQty, setMoveQty] = useState<number>(1);
+  const [moveRef, setMoveRef] = useState<string>('');
+  const [moveError, setMoveError] = useState<string | null>(null);
+
+  const effectiveVariantId = selectedVariantId || variants[0]?.id || '';
+  const effectiveWarehouseId = selectedWarehouseId || warehouses[0]?.id || '';
+
+  const handleQuickMovement = async () => {
+    if (!canLoad) return;
+    setMoveError(null);
+    if (!effectiveVariantId) {
+      setMoveError('Stok hareketi için aktif bir varyant seçin.');
+      return;
+    }
+    if (!effectiveWarehouseId) {
+      setMoveError('Stok hareketi için aktif bir depo seçin.');
+      return;
+    }
+    if (!Number.isInteger(moveQty) || moveQty < 1) {
+      setMoveError('Miktar en az 1 tam sayı olmalıdır.');
+      return;
+    }
+    const ref = moveRef.trim() || `QUICK-${movementType}-${Date.now()}`;
+    try {
+      await movementMutation.mutateAsync({
+        variantId: effectiveVariantId,
+        warehouseId: effectiveWarehouseId,
+        movementType,
+        quantity: moveQty,
+        referenceNo: ref,
+      });
+      toast.success(
+        movementType === 'INBOUND'
+          ? `${moveQty} adet stok girişi kaydedildi.`
+          : `${moveQty} adet stok çıkışı kaydedildi.`
+      );
+      setMoveQty(1);
+      setMoveRef('');
+    } catch (err) {
+      const msg =
+        err instanceof ApiClientError ? err.message : 'Stok hareketi kaydedilemedi.';
+      setMoveError(msg);
+      toast.error(msg);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -53,7 +115,7 @@ export function ProductStockPanel({
           <h3 className="text-sm font-semibold text-foreground">Stok &amp; Depo</h3>
           <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
             Fiziksel stok <span className="font-mono">WarehouseStock</span> kayıtlarıdır (varyant × depo).
-            Ürün kartındaki stok adedi yalnızca aggregate özet; buradan yazılmaz.
+            Mevcut ürünlerde stok değişiklikleri denetim izli stok hareketi olarak kaydedilir.
           </p>
         </div>
         <Button type="button" size="sm" variant="outline" asChild>
@@ -64,7 +126,24 @@ export function ProductStockPanel({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-lg border border-border bg-muted/40">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-lg border border-border bg-muted/40">
+        {mode === 'create' && (
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-foreground">
+              Başlangıç Stoğu (Adet)
+            </label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              className="h-9 text-right font-mono tabular-nums"
+              value={catalogStockQty}
+              onChange={(e) =>
+                onInitialStockQtyChange?.(Math.max(0, Math.round(Number(e.target.value) || 0)))
+              }
+            />
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-[11px] font-medium text-muted-foreground">Katalog stok durumu</label>
           <select
@@ -104,25 +183,136 @@ export function ProductStockPanel({
             onChange={(e) => onLeadTimeChange(Math.max(0, Math.round(Number(e.target.value) || 0)))}
           />
         </div>
-        <div className="sm:col-span-3 text-[11px] text-muted-foreground">
-          Aggregate satılabilir: <span className="font-mono text-foreground">{catalogStockQty}</span>
-          {' · '}
-          Gerçek bakiyeler aşağıdaki depo satırlarından gelir.
+        <div className="sm:col-span-2 lg:col-span-4 text-[11px] text-muted-foreground">
+          {mode === 'create'
+            ? 'Girilen başlangıç stoğu ürün oluşturulduğunda varsayılan varyant ve merkez depo stok kaydına otomatik işlenir.'
+            : (
+              <>
+                Toplam satılabilir stok:{' '}
+                <span className="font-mono font-semibold text-foreground">{catalogStockQty} adet</span>
+                {' · '}Gerçek bakiyeler aşağıdaki depo satırlarından gelir.
+              </>
+            )}
         </div>
       </div>
 
       {!canLoad ? (
-        <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center space-y-2">
+        <div className="rounded-lg border border-dashed border-border px-4 py-6 text-center space-y-1.5">
           <Package className="w-5 h-5 mx-auto text-muted-foreground" />
-          <p className="text-sm font-medium">Stok satırları ürün kaydından sonra görünür</p>
+          <p className="text-sm font-medium">Depo hareket defteri ürün kaydından sonra açılır</p>
           <p className="text-xs text-muted-foreground">
-            Aynı varyantın birden fazla depoda stoğu olabilir; miktar Product/ProductVariant tablosuna
-            yazılmaz.
+            Yukarıdan başlangıç stok adedini girebilirsiniz; çoklu depo transfer ve giriş/çıkışları ürün kaydedildikten sonra aktifleşir.
           </p>
         </div>
       ) : (
         <>
-          <div className="border border-border rounded-lg overflow-hidden">
+          {/* Quick stock entry / exit via inventory API */}
+          <div className="rounded-lg border border-border bg-card p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-xs font-semibold text-foreground">
+                Hızlı Stok Giriş / Çıkış (Envanter Hareketi)
+              </h4>
+              <span className="text-[10px] font-mono text-muted-foreground">
+                POST /api/v1/ops/stock-movements
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 items-end">
+              <div className="space-y-1">
+                <Label className="text-[11px]">Varyant</Label>
+                <select
+                  className={FIELD_SELECT_CLASS}
+                  value={effectiveVariantId}
+                  onChange={(e) => setSelectedVariantId(e.target.value)}
+                >
+                  {variants.length === 0 && <option value="">Aktif varyant yok</option>}
+                  {variants.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.sku} ({v.stockQty} adet)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[11px]">Depo</Label>
+                <select
+                  className={FIELD_SELECT_CLASS}
+                  value={effectiveWarehouseId}
+                  onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                >
+                  {warehouses.length === 0 && <option value="">Aktif depo yok</option>}
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.code} · {w.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[11px]">İşlem Tipi</Label>
+                <select
+                  className={FIELD_SELECT_CLASS}
+                  value={movementType}
+                  onChange={(e) => setMovementType(e.target.value as 'INBOUND' | 'SHIP')}
+                >
+                  <option value="INBOUND">Stok Girişi (+)</option>
+                  <option value="SHIP">Stok Çıkışı (-)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[11px]">Adet</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  className="h-9 text-right font-mono tabular-nums"
+                  value={moveQty}
+                  onChange={(e) => setMoveQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[11px]">Referans / Açıklama</Label>
+                <Input
+                  type="text"
+                  value={moveRef}
+                  onChange={(e) => setMoveRef(e.target.value)}
+                  placeholder="Örn. SAYIM-2026"
+                  className="h-9 font-mono text-xs"
+                />
+              </div>
+            </div>
+
+            {moveError && (
+              <div className="px-3 py-2 rounded-md bg-red-50 border border-red-200 text-red-800 text-xs font-medium">
+                {moveError}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant={movementType === 'INBOUND' ? 'success' : 'outline'}
+                disabled={movementMutation.isPending || variants.length === 0 || warehouses.length === 0}
+                onClick={() => void handleQuickMovement()}
+              >
+                {movementMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : movementType === 'INBOUND' ? (
+                  <ArrowUpCircle className="w-3.5 h-3.5" />
+                ) : (
+                  <ArrowDownCircle className="w-3.5 h-3.5" />
+                )}
+                {movementType === 'INBOUND' ? 'Stok Girişi Kaydet' : 'Stok Çıkışı Kaydet'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="border border-border rounded-lg overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="bg-muted/60 text-muted-foreground">
                 <tr>
@@ -145,7 +335,7 @@ export function ProductStockPanel({
                 {!stocksQuery.isLoading && stocks.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
-                      Bu ürün için depo stok kaydı yok. Giriş için Stok &amp; Depo ekranını kullanın.
+                      Bu ürün için depo stok kaydı yok. Yukarıdaki formdan ilk stok girişini yapabilirsiniz.
                     </td>
                   </tr>
                 )}
@@ -172,7 +362,7 @@ export function ProductStockPanel({
 
           <div>
             <h4 className="text-xs font-semibold text-foreground mb-2">Son stok hareketleri</h4>
-            <div className="border border-border rounded-lg overflow-hidden">
+            <div className="border border-border rounded-lg overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-muted/60 text-muted-foreground">
                   <tr>
@@ -194,7 +384,7 @@ export function ProductStockPanel({
                   )}
                   {movements.map((m) => (
                     <tr key={m.id} className="border-t border-border">
-                      <td className="px-3 py-2 font-mono text-muted-foreground">
+                      <td className="px-3 py-2 font-mono text-muted-foreground whitespace-nowrap">
                         {new Date(m.createdAt).toLocaleString('tr-TR')}
                       </td>
                       <td className="px-3 py-2">{m.movementType}</td>

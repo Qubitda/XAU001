@@ -293,6 +293,7 @@ def record_manual_stock_movement(
         defaults={"quantity": 0, "reserved_qty": 0},
     )
 
+    prev_qty = ws.quantity
     if movement_type == StockMovement.MovementType.INBOUND:
         ws.quantity += quantity
         delta = quantity
@@ -328,6 +329,8 @@ def record_manual_stock_movement(
             "variant_sku": variant.sku,
             "warehouse_code": warehouse.code,
             "movement_type": movement_type,
+            "previous_qty": prev_qty,
+            "new_qty": ws.quantity,
             "quantity_delta": delta,
             "reference_no": ref,
         },

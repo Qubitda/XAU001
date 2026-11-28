@@ -13,6 +13,12 @@ def validate_publishable(product: ProductModel) -> list[str]:
     Empty list means the product satisfies all publish gates.
     """
     missing: list[str] = []
+    if not (product.title or "").strip() or len((product.title or "").strip()) < 4:
+        missing.append("TITLE_REQUIRED")
+    if not (product.category or "").strip():
+        missing.append("CATEGORY_REQUIRED")
+    if product.gross_weight_gram is None or product.gross_weight_gram < Decimal("0.01"):
+        missing.append("GROSS_WEIGHT_REQUIRED")
     if not PricingRecipe.objects.filter(
         product=product, status=PricingRecipe.Status.PUBLISHED
     ).exists():

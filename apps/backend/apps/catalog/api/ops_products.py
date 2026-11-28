@@ -1,8 +1,14 @@
 """OPS product list/create/detail endpoints."""
 from decimal import Decimal
+from pathlib import PurePosixPath
+import uuid
 
+from django.conf import settings
+from django.core.files.storage import default_storage
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
+from drf_spectacular.utils import extend_schema
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
@@ -84,6 +90,12 @@ class OpsProductListCreateView(APIView):
         d = serializer.validated_data
         ctx = resolve_tenant_context(request)
         _enforce_field_permissions(ctx, {k: v for k, v in request.data.items() if k in FIELD_PERMISSIONS})
+        if str(request.data.get("catalogStatus") or "").upper() == ProductModel.CatalogStatus.ACTIVE:
+            raise DomainError(
+                "Yeni ürün doğrudan ACTIVE olarak oluşturulamaz. Önce taslak oluşturup /api/v1/ops/products/<sku>/publish endpoint'ini kullanın.",
+                code="USE_PUBLISH_ENDPOINT",
+                status_code=400,
+            )
         sku = d["parentSku"].strip().upper()
         if ProductModel.objects.filter(parent_sku=sku).exists():
             raise DomainError(f"{sku} model kodu zaten katalogda mevcut.", code="DUPLICATE_SKU", status_code=409)
@@ -104,7 +116,11 @@ class OpsProductListCreateView(APIView):
                 parent_sku=sku,
                 erp_code=erp_code,
                 owner_organization=owner_org,
-                catalog_status=d.get("catalogStatus") or ProductModel.CatalogStatus.DRAFT,
+                catalog_status=(
+                    ProductModel.CatalogStatus.ARCHIVED
+                    if str(d.get("catalogStatus") or "").upper() == ProductModel.CatalogStatus.ARCHIVED
+                    else ProductModel.CatalogStatus.DRAFT
+                ),
                 barcode=d.get("barcode", ""),
                 visual_type=d.get("visualType", "solitaire_ring"),
                 title=d["title"],
@@ -152,9 +168,10 @@ class OpsProductListCreateView(APIView):
                 clasp_type=d.get("claspType") or "",
                 is_resizable=d.get("isResizable", True),
                 warranty_months=d.get("warrantyMonths", 24),
-                insured_shipping_info=d.get("insuredShippingInfo", "Tam sigortalı Brinks / Loomis özel kurye"),
+                lifetime_maintenance=d.get("lifetimeMaintenance") or "",
+                insured_shipping_info=d.get("insuredShippingInfo") or "Tam sigortalı Brinks / Loomis özel kurye",
                 return_policy_text=d.get("returnPolicyText") or "Standart stok ürünlerinde 14 gün içinde koşulsuz iade; kişiye özel ölçü ve lazer yazı ürünlerinde iade istisnası uygulanır.",
-                description=d["description"],
+                description=d.get("description") or "",
                 mount_structure=mount_spec.get("structure", ProductModel.MountStructure.FULL),
                 allowed_carat_min=_parse_decimal(
                     mount_spec.get("allowedCaratMin"),
@@ -182,6 +199,16 @@ class OpsProductListCreateView(APIView):
                 ),
                 seo_slug=raw_slug,
                 meta_title=d.get("metaTitle") or d["title"],
+                meta_description=d.get("metaDescription") or "",
+                marketplace_category=d.get("marketplaceCategory") or "",
+                size_guide_url=d.get("sizeGuideUrl") or "",
+                og_image=d.get("ogImage") or "",
+                canonical_url=d.get("canonicalUrl") or "",
+                robots=d.get("robots") or "index,follow",
+                keywords=d.get("keywords") or "",
+                b2b_share_permission=d.get("b2bSharePermission") or "ALLOWED",
+                dynamic_dealer_watermark=bool(d.get("dynamicDealerWatermark", True)),
+                social_share_caption=d.get("socialShareCaption") or "",
                 created_by=request.user,
             )
         except IntegrityError:
@@ -194,8 +221,10 @@ class OpsProductListCreateView(APIView):
         _sync_product_media(
             product,
             gallery_images=d.get("galleryImages"),
+            media_items=d.get("mediaItems"),
             reels_video_url=d.get("reelsVideoUrl"),
             spin_360_url=d.get("spin360Url"),
+            catalog_clean_image_url=d.get("catalogCleanImageUrl"),
             certificate_file_url=d.get("certificateFileUrl"),
         )
 
@@ -302,17 +331,20 @@ class OpsProductDetailView(APIView):
 
     @transaction.atomic
     def patch(self, request: Request, parent_sku: str):
-        product = ProductModel.objects.filter(parent_sku=parent_sku).first()
+        product = ProductModel.objects.select_for_update().filter(parent_sku=parent_sku).first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
         ctx = resolve_tenant_context(request)
-        if str(request.data.get("catalogStatus") or "").upper() == ProductModel.CatalogStatus.ACTIVE:
+        if (
+            str(request.data.get("catalogStatus") or "").upper() == ProductModel.CatalogStatus.ACTIVE
+            and product.catalog_status != ProductModel.CatalogStatus.ACTIVE
+        ):
             raise DomainError(
                 "Ürünü yayına almak için /api/v1/ops/products/<sku>/publish endpoint'ini kullanın.",
                 code="USE_PUBLISH_ENDPOINT",
                 status_code=400,
             )
-        if "stockQty" in request.data:
+        if "stockQty" in request.data and request.data.get("stockQty") != product.stock_qty:
             raise DomainError(
                 "Stok miktarını güncellemek için /api/v1/ops/products/<sku>/variants/<id>/stock endpoint'ini kullanın.",
                 code="USE_INVENTORY_API",
@@ -383,16 +415,43 @@ class OpsProductDetailView(APIView):
             "claspType": "clasp_type",
             "isResizable": "is_resizable",
             "warrantyMonths": "warranty_months",
+            "lifetimeMaintenance": "lifetime_maintenance",
             "insuredShippingInfo": "insured_shipping_info",
             "returnPolicyText": "return_policy_text",
             "metaTitle": "meta_title",
+            "metaDescription": "meta_description",
+            "marketplaceCategory": "marketplace_category",
+            "sizeGuideUrl": "size_guide_url",
+            "ogImage": "og_image",
+            "canonicalUrl": "canonical_url",
+            "robots": "robots",
+            "keywords": "keywords",
             "description": "description",
+            "b2bSharePermission": "b2b_share_permission",
+            "dynamicDealerWatermark": "dynamic_dealer_watermark",
+            "socialShareCaption": "social_share_caption",
+        }
+        nullable_text_keys = {
+            "lifetimeMaintenance",
+            "insuredShippingInfo",
+            "returnPolicyText",
+            "metaTitle",
+            "metaDescription",
+            "marketplaceCategory",
+            "sizeGuideUrl",
+            "ogImage",
+            "canonicalUrl",
+            "robots",
+            "keywords",
+            "description",
         }
         for api_key, model_field in editable_map.items():
             if api_key in d:
                 value = d[api_key]
                 if api_key == "salesChannels":
                     value = _normalize_sales_channels(value)
+                elif api_key in nullable_text_keys and value is None:
+                    value = ""
                 setattr(product, model_field, value)
 
         _apply_kind_fields(product, d)
@@ -400,8 +459,8 @@ class OpsProductDetailView(APIView):
         if product.stock_qty <= 0 and product.stock_status != ProductModel.StockStatus.MADE_TO_ORDER:
             product.stock_status = ProductModel.StockStatus.OUT_OF_STOCK
 
-        if "seoSlug" in d and d["seoSlug"].strip():
-            cleaned_slug = slugify(d["seoSlug"].strip())
+        if "seoSlug" in d and (d["seoSlug"] or "").strip():
+            cleaned_slug = slugify((d["seoSlug"] or "").strip())
             if cleaned_slug:
                 if ProductModel.objects.filter(seo_slug=cleaned_slug).exclude(id=product.id).exists():
                     raise DomainError(f"SEO slug başka bir üründe kullanılıyor: {cleaned_slug}", code="DUPLICATE_SLUG", status_code=409)
@@ -440,8 +499,10 @@ class OpsProductDetailView(APIView):
         _sync_product_media(
             product,
             gallery_images=d.get("galleryImages") if "galleryImages" in d else None,
+            media_items=d.get("mediaItems") if "mediaItems" in d else None,
             reels_video_url=d.get("reelsVideoUrl") if "reelsVideoUrl" in d else None,
             spin_360_url=d.get("spin360Url") if "spin360Url" in d else None,
+            catalog_clean_image_url=d.get("catalogCleanImageUrl") if "catalogCleanImageUrl" in d else None,
             certificate_file_url=d.get("certificateFileUrl") if "certificateFileUrl" in d else None,
         )
 
@@ -566,7 +627,7 @@ class OpsProductPublishView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, parent_sku: str):
-        product = ProductModel.objects.filter(parent_sku=parent_sku).first()
+        product = ProductModel.objects.select_for_update().filter(parent_sku=parent_sku).first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
         missing = validate_publishable(product)
@@ -589,6 +650,30 @@ class OpsProductPublishView(APIView):
         return envelope_response({"parentSku": parent_sku, "catalogStatus": product.catalog_status}, request)
 
 
+class OpsProductUnpublishView(APIView):
+    permission_classes = [HasPortalPermission]
+    ops_only = True
+    required_permission = "catalog:publish"
+
+    @extend_schema(tags=["OPS - Catalog"], summary="Ürünü yayından kaldır (DRAFT)")
+    @transaction.atomic
+    def post(self, request: Request, parent_sku: str):
+        product = ProductModel.objects.select_for_update().filter(parent_sku=parent_sku).first()
+        if product is None:
+            raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
+        prev = product.catalog_status
+        product.catalog_status = ProductModel.CatalogStatus.DRAFT
+        product.save(update_fields=["catalog_status", "updated_at"])
+        record_audit(
+            action="PRODUCT_UNPUBLISHED",
+            entity_type="ProductModel",
+            entity_id=parent_sku,
+            actor=request.user,
+            metadata={"changed": {"catalogStatus": {"from": prev, "to": "DRAFT"}}},
+        )
+        return envelope_response({"parentSku": parent_sku, "catalogStatus": product.catalog_status}, request)
+
+
 class OpsProductRecipePublishView(APIView):
     permission_classes = [HasPortalPermission]
     ops_only = True
@@ -596,7 +681,7 @@ class OpsProductRecipePublishView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, parent_sku: str):
-        product = ProductModel.objects.filter(parent_sku=parent_sku).first()
+        product = ProductModel.objects.select_for_update().filter(parent_sku=parent_sku).first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {parent_sku}", code="PRODUCT_NOT_FOUND", status_code=404)
         draft = (
@@ -617,4 +702,76 @@ class OpsProductRecipePublishView(APIView):
         return envelope_response(
             {"parentSku": parent_sku, "recipeId": str(published.id), "version": published.version, "status": published.status},
             request,
+        )
+
+
+_CATALOG_UPLOAD_MAX_IMAGE_BYTES = 10 * 1024 * 1024
+_CATALOG_UPLOAD_MAX_VIDEO_BYTES = 25 * 1024 * 1024
+_CATALOG_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_CATALOG_VIDEO_EXTS = {".mp4", ".webm", ".mov"}
+_CATALOG_CERT_EXTS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+
+
+class OpsCatalogMediaUploadView(APIView):
+    """Upload a product image, video, 360 asset, or certificate PDF for catalog media fields."""
+
+    permission_classes = [HasPortalPermission]
+    ops_only = True
+    required_permission = "catalog:write"
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(tags=["OPS - Catalog"], summary="Katalog medya dosyası yükle")
+    def post(self, request: Request):
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise DomainError("Dosya gerekli (file).", code="CATALOG_MEDIA_REQUIRED", status_code=400)
+
+        kind = str(request.data.get("kind") or "any").strip().lower()
+        ext = PurePosixPath(upload.name or "").suffix.lower()
+
+        if kind == "image":
+            allowed_exts = _CATALOG_IMAGE_EXTS
+            max_bytes = _CATALOG_UPLOAD_MAX_IMAGE_BYTES
+            label = "Görsel (jpg, jpeg, png, webp, gif)"
+        elif kind == "video":
+            allowed_exts = _CATALOG_VIDEO_EXTS
+            max_bytes = _CATALOG_UPLOAD_MAX_VIDEO_BYTES
+            label = "Video (mp4, webm, mov)"
+        elif kind == "certificate":
+            allowed_exts = _CATALOG_CERT_EXTS
+            max_bytes = _CATALOG_UPLOAD_MAX_IMAGE_BYTES
+            label = "Sertifika (pdf, jpg, jpeg, png, webp)"
+        else:
+            allowed_exts = _CATALOG_IMAGE_EXTS | _CATALOG_VIDEO_EXTS | _CATALOG_CERT_EXTS
+            max_bytes = _CATALOG_UPLOAD_MAX_VIDEO_BYTES if ext in _CATALOG_VIDEO_EXTS else _CATALOG_UPLOAD_MAX_IMAGE_BYTES
+            label = "Görsel, video veya PDF"
+
+        if ext not in allowed_exts:
+            raise DomainError(
+                f"Desteklenmeyen dosya türü ({ext or 'yok'}). İzin verilen: {label}.",
+                code="CATALOG_MEDIA_TYPE",
+                status_code=400,
+            )
+
+        if upload.size and upload.size > max_bytes:
+            limit_mb = max_bytes // (1024 * 1024)
+            raise DomainError(
+                f"Dosya boyutu en fazla {limit_mb} MB olabilir.",
+                code="CATALOG_MEDIA_TOO_LARGE",
+                status_code=400,
+            )
+
+        filename = f"catalog/{uuid.uuid4().hex}{ext}"
+        saved = default_storage.save(filename, upload)
+        relative = f"{settings.MEDIA_URL.rstrip('/')}/{saved.lstrip('/')}"
+        absolute = request.build_absolute_uri(relative)
+        return envelope_response(
+            {
+                "url": absolute,
+                "path": relative,
+                "filename": upload.name or PurePosixPath(saved).name,
+                "size": upload.size or 0,
+            },
+            request,
+            status=201,
         )

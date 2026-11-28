@@ -327,6 +327,7 @@ export interface ProductState {
 
   // 12. Medya & B2B Katalog
   galleryImages: string[];
+  mediaItems?: ProductMediaEntry[];
   reelsVideoUrl: string;
   spin360Url: string;
   catalogCleanImageUrl: string;
@@ -342,7 +343,12 @@ export interface ProductState {
   returnPolicyText: string;
   seoSlug: string;
   metaTitle: string;
+  metaDescription?: string;
   marketplaceCategory: string;
+  ogImage?: string;
+  canonicalUrl?: string;
+  robots?: string;
+  keywords?: string;
 
   // Sunucu taraflı (Kör Havuz uyumlu) fiyat, varyant & metal özet alanları
   ownerOrganizationId?: string | null;
@@ -366,6 +372,25 @@ export interface ProductState {
     fireIncludedFineMetalGram?: number;
     fineness: number;
   };
+}
+
+export type ProductMediaRole =
+  | 'GALLERY_MAIN'
+  | 'GALLERY'
+  | 'ON_HAND'
+  | 'MACRO'
+  | 'DETAIL'
+  | 'VIDEO_REELS'
+  | 'SPIN_360'
+  | 'CATALOG_CLEAN'
+  | 'CERTIFICATE_PDF';
+
+export interface ProductMediaEntry {
+  id?: string;
+  metalColor: string;
+  role: ProductMediaRole;
+  url: string;
+  sortOrder: number;
 }
 
 export interface ProductVariantSummary {

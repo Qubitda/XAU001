@@ -42,8 +42,10 @@ import {
   useActiveProductMetrics,
   useDeleteProductMutation,
   usePortalSelection,
-  useUpdateProductMutation,
+  usePublishProductMutation,
+  useUnpublishProductMutation,
 } from '../hooks/useCatalogQueries';
+import { formatPublishError } from '../utils/publishMessages';
 import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
 import type { ProductState } from '../types';
 import {
@@ -58,8 +60,10 @@ export function CatalogManagementView() {
   const navigate = useNavigate();
   const { products, rates } = useActiveProductMetrics();
   const { setSelectedParentSku } = usePortalSelection();
-  const updateProductMutation = useUpdateProductMutation();
+  const publishProductMutation = usePublishProductMutation();
+  const unpublishProductMutation = useUnpublishProductMutation();
   const deleteProductMutation = useDeleteProductMutation();
+  const [publishError, setPublishError] = useState<string | null>(null);
   const categoryDefs = useDefinitionOptions('kategori');
 
   const categoryOptions = useMemo<DefinitionOption[]>(() => {
@@ -219,6 +223,18 @@ export function CatalogManagementView() {
           }
         >
           <PortalDataCard contentClassName="overflow-x-auto">
+            {publishError && (
+              <div className="mx-4 mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-center justify-between gap-2">
+                <span>{publishError}</span>
+                <button
+                  type="button"
+                  onClick={() => setPublishError(null)}
+                  className="text-[11px] font-medium underline cursor-pointer shrink-0"
+                >
+                  Kapat
+                </button>
+              </div>
+            )}
             <Table className="text-xs">
               <TableHeader className="bg-muted/40">
                 <TableRow>
@@ -316,13 +332,21 @@ export function CatalogManagementView() {
                               : 'h-8 w-8 text-emerald-600 hover:text-emerald-700'
                           }
                           title={isPublished ? 'Yayından Kaldır (Taslağa Al)' : 'Yayınla'}
-                          disabled={updateProductMutation.isPending}
-                          onClick={() =>
-                            updateProductMutation.mutate({
-                              parentSku: product.parentSku,
-                              patch: { catalogStatus: isPublished ? 'DRAFT' : 'ACTIVE' },
-                            })
+                          disabled={
+                            unpublishProductMutation.isPending || publishProductMutation.isPending
                           }
+                          onClick={async () => {
+                            setPublishError(null);
+                            try {
+                              if (isPublished) {
+                                await unpublishProductMutation.mutateAsync(product.parentSku);
+                              } else {
+                                await publishProductMutation.mutateAsync(product.parentSku);
+                              }
+                            } catch (err) {
+                              setPublishError(formatPublishError(err));
+                            }
+                          }}
                         >
                           {isPublished ? (
                             <EyeOff className="w-3.5 h-3.5" />
