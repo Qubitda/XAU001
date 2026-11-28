@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from apps.authorization.permissions import IsB2bOrganizationMember
 from apps.common.responses import GRAM_Q, MONEY_Q, dec_str, paginated_envelope_response
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 from config.exceptions import DomainError
 
 from .api import serialize_ops_ledger_entry
@@ -25,7 +25,7 @@ class B2bLedgerListView(APIView):
             raise DomainError("Aktif bayi organizasyonu bulunamadı.", code="ORG_REQUIRED", status_code=400)
         org = ctx.organization
         qs = (
-            DealerLedgerEntry.objects.filter(organization=org)
+            scope_queryset_to_organization(DealerLedgerEntry.objects.all(), ctx)
             .select_related("organization", "created_by")
             .order_by("-created_at")
         )
