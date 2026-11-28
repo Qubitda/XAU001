@@ -34,10 +34,6 @@ def dual_write_enabled() -> bool:
     return getattr(settings, "CATALOG_DUAL_WRITE_DETAILS", True)
 
 
-def pricing_read_from_details() -> bool:
-    return getattr(settings, "PRICING_READ_FROM_DETAILS", False)
-
-
 def resolve_fineness(purity_code: str, fallback: Decimal | None = None) -> Decimal:
     """Prefer DefinitionItem.meta.fineness (ayar_kodu); fall back to engine map."""
     code = (purity_code or "").strip()
@@ -228,40 +224,6 @@ def dual_write_product_details(product: ProductModel, overrides: dict | None = N
         upsert_mounting_detail(product, overrides)
     else:
         upsert_loose_stone_detail(product, overrides)
-
-
-def mirror_detail_to_legacy(product: ProductModel) -> None:
-    """Push detail fields back onto legacy ProductModel columns (read-path sync)."""
-    kind = normalize_product_kind(product.product_kind)
-    if kind == FINISHED and hasattr(product, "finished_detail"):
-        d = product.finished_detail
-        product.metal_name = d.metal_name
-        product.purity_code = d.purity_code
-        product.metal_color = d.metal_color
-        product.gross_weight_gram = d.base_weight_gr
-        product.fire_rate_pct = d.fire_rate_pct
-    elif kind == MOUNTING and hasattr(product, "mounting_detail"):
-        d = product.mounting_detail
-        product.metal_name = d.metal_name
-        product.purity_code = d.purity_code
-        product.metal_color = d.metal_color
-        product.gross_weight_gram = d.net_weight_gr
-        product.mount_structure = d.mount_structure
-        product.allowed_carat_min = d.min_carat or product.allowed_carat_min
-        product.allowed_carat_max = d.max_carat or product.allowed_carat_max
-        product.head_code = d.head_code
-        product.band_code = d.band_code
-        product.head_weight_gram = d.head_weight_gram
-        product.band_weight_gram = d.band_weight_gram
-    elif kind == LOOSE_STONE and hasattr(product, "loose_stone_detail"):
-        d = product.loose_stone_detail
-        product.stone_type = d.stone_category
-        product.stone_cut_shape = d.shape
-        product.stone_color_grade = d.color
-        product.stone_clarity = d.clarity
-        product.stone_cut_grade = d.cut_grade
-        product.certificate_agency = d.cert_lab
-        product.certificate_number = d.cert_number
 
 
 def serialize_finished_detail(d: FinishedDetail, *, for_ops: bool = False) -> dict:
