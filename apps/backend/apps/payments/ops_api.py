@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from apps.authorization.permissions import HasPortalPermission
 from apps.common.responses import envelope_response
 from apps.mail.crypto import encrypt_secret
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 from config.exceptions import DomainError
 
 from .bank_transfer import (
@@ -162,7 +162,7 @@ class OpsPaymentProviderSettingsView(APIView):
         if not ctx.is_ops:
             if ctx.organization is None:
                 raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
-            qs = qs.filter(organization=ctx.organization)
+            qs = scope_queryset_to_organization(qs, ctx)
         else:
             scope = (request.query_params.get("scope") or "platform").lower()
             if scope == "platform":
@@ -448,7 +448,7 @@ class OpsBankAccountsView(APIView):
         if not ctx.is_ops:
             if ctx.organization is None:
                 raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
-            qs = qs.filter(organization=ctx.organization)
+            qs = scope_queryset_to_organization(qs, ctx)
         else:
             scope = (request.query_params.get("scope") or "platform").lower()
             if scope == "platform":
