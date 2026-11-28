@@ -61,7 +61,7 @@ export function ProductStockPanel({
 
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
-  const [movementType, setMovementType] = useState<'INBOUND' | 'SHIP'>('INBOUND');
+  const [movementType, setMovementType] = useState<'INBOUND' | 'SHIP' | 'SET'>('INBOUND');
   const [moveQty, setMoveQty] = useState<number>(1);
   const [moveRef, setMoveRef] = useState<string>('');
   const [moveError, setMoveError] = useState<string | null>(null);
@@ -80,8 +80,12 @@ export function ProductStockPanel({
       setMoveError('Stok hareketi için aktif bir depo seçin.');
       return;
     }
-    if (!Number.isInteger(moveQty) || moveQty < 1) {
+    if (movementType !== 'SET' && (!Number.isInteger(moveQty) || moveQty < 1)) {
       setMoveError('Miktar en az 1 tam sayı olmalıdır.');
+      return;
+    }
+    if (movementType === 'SET' && (!Number.isInteger(moveQty) || moveQty < 0)) {
+      setMoveError('Hedef stok 0 veya pozitif bir tam sayı olmalıdır.');
       return;
     }
     const ref = moveRef.trim() || `QUICK-${movementType}-${Date.now()}`;
@@ -94,11 +98,13 @@ export function ProductStockPanel({
         referenceNo: ref,
       });
       toast.success(
-        movementType === 'INBOUND'
-          ? `${moveQty} adet stok girişi kaydedildi.`
-          : `${moveQty} adet stok çıkışı kaydedildi.`
+        movementType === 'SET'
+          ? `Stok ${moveQty} adet olarak güncellendi.`
+          : movementType === 'INBOUND'
+            ? `${moveQty} adet stok girişi kaydedildi.`
+            : `${moveQty} adet stok çıkışı kaydedildi.`
       );
-      setMoveQty(1);
+      setMoveQty(movementType === 'SET' ? moveQty : 1);
       setMoveRef('');
     } catch (err) {
       const msg =
@@ -255,22 +261,35 @@ export function ProductStockPanel({
                 <select
                   className={FIELD_SELECT_CLASS}
                   value={movementType}
-                  onChange={(e) => setMovementType(e.target.value as 'INBOUND' | 'SHIP')}
+                  onChange={(e) => {
+                    const next = e.target.value as 'INBOUND' | 'SHIP' | 'SET';
+                    setMovementType(next);
+                    if (next === 'SET') {
+                      const currentVar = variants.find((v) => v.id === effectiveVariantId);
+                      setMoveQty(currentVar?.stockQty ?? catalogStockQty ?? 0);
+                    } else if (moveQty < 1) {
+                      setMoveQty(1);
+                    }
+                  }}
                 >
                   <option value="INBOUND">Stok Girişi (+)</option>
                   <option value="SHIP">Stok Çıkışı (-)</option>
+                  <option value="SET">Stok Düzelt / Eşitle (=)</option>
                 </select>
               </div>
 
               <div className="space-y-1">
-                <Label className="text-[11px]">Adet</Label>
+                <Label className="text-[11px]">{movementType === 'SET' ? 'Hedef Adet' : 'Adet'}</Label>
                 <Input
                   type="number"
-                  min={1}
+                  min={movementType === 'SET' ? 0 : 1}
                   step={1}
                   className="h-9 text-right font-mono tabular-nums"
                   value={moveQty}
-                  onChange={(e) => setMoveQty(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                  onChange={(e) => {
+                    const minVal = movementType === 'SET' ? 0 : 1;
+                    setMoveQty(Math.max(minVal, Math.round(Number(e.target.value) || 0)));
+                  }}
                 />
               </div>
 
@@ -307,7 +326,11 @@ export function ProductStockPanel({
                 ) : (
                   <ArrowDownCircle className="w-3.5 h-3.5" />
                 )}
-                {movementType === 'INBOUND' ? 'Stok Girişi Kaydet' : 'Stok Çıkışı Kaydet'}
+                {movementType === 'SET'
+                  ? 'Stok Düzeltmesini Kaydet'
+                  : movementType === 'INBOUND'
+                    ? 'Stok Girişi Kaydet'
+                    : 'Stok Çıkışı Kaydet'}
               </Button>
             </div>
           </div>

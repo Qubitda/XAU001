@@ -130,12 +130,32 @@ function computeToneFallbackFilter(
   return undefined;
 }
 
+function getMediaOrigin(): string {
+  const base = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '')
+    .trim()
+    .replace(/\/+$/, '');
+  return base;
+}
+
+export function resolveMediaUrl(url: string | undefined | null): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('/media/')) {
+    const origin = getMediaOrigin();
+    return origin ? `${origin}${trimmed}` : trimmed;
+  }
+  return trimmed;
+}
+
 export function resolveProductMedia(
   parentSku: string,
   metalColor: MetalColor,
   galleryImages?: string[]
 ): ResolvedProductMedia {
-  const customPhotos = (galleryImages ?? []).filter((u) => isRenderableMediaUrl(u));
+  const customPhotos = (galleryImages ?? [])
+    .filter((u) => isRenderableMediaUrl(u))
+    .map((u) => resolveMediaUrl(u));
   const entry = MEDIA_REGISTRY[parentSku];
   const tone = canonicalizeMetalColor(metalColor);
 

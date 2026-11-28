@@ -104,11 +104,13 @@ class OpsStockMovementCreateSerializer(serializers.Serializer):
     variantSku = serializers.CharField(max_length=64, required=False, allow_blank=True)
     warehouseId = serializers.UUIDField(required=False)
     warehouseCode = serializers.CharField(max_length=32, required=False, allow_blank=True)
-    movementType = serializers.ChoiceField(choices=StockMovement.MovementType.values)
-    quantity = serializers.IntegerField(min_value=1, max_value=100000)
+    movementType = serializers.ChoiceField(choices=[*StockMovement.MovementType.values, "SET"])
+    quantity = serializers.IntegerField(min_value=0, max_value=100000)
     referenceNo = serializers.CharField(max_length=64)
 
     def validate(self, attrs):
+        if attrs.get("movementType") != "SET" and attrs.get("quantity", 0) < 1:
+            raise serializers.ValidationError({"quantity": "Bu hareket tipi için adet en az 1 olmalıdır."})
         if not attrs.get("variantId") and not attrs.get("variantSku"):
             raise serializers.ValidationError("variantId veya variantSku zorunludur.")
         if not attrs.get("warehouseId") and not attrs.get("warehouseCode"):

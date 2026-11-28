@@ -236,7 +236,7 @@ export const opsService = {
     variantSku?: string;
     warehouseId?: string;
     warehouseCode?: string;
-    movementType: 'INBOUND' | 'SHIP' | 'RESERVE' | 'RELEASE';
+    movementType: 'INBOUND' | 'SHIP' | 'RESERVE' | 'RELEASE' | 'SET';
     quantity: number;
     referenceNo: string;
   }): Promise<OpsStockMovement> {

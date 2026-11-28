@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   Calculator,
   CheckCircle2,
@@ -47,6 +48,7 @@ import {
 } from '../hooks/useCatalogQueries';
 import { formatPublishError } from '../utils/publishMessages';
 import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
+import { QuickStockModal } from './QuickStockModal';
 import type { ProductState } from '../types';
 import {
   matchesDefinitionValue,
@@ -101,6 +103,8 @@ export function CatalogManagementView() {
     tab: ProductModalTab;
   } | null>(null);
   const [deletingProduct, setDeletingProduct] = useState<ProductState | null>(null);
+  const [quickStockProduct, setQuickStockProduct] = useState<ProductState | null>(null);
+  const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({});
 
   const publishedCount = useMemo(
     () => products.filter((p) => (p.catalogStatus ?? 'ACTIVE') === 'ACTIVE').length,
@@ -144,8 +148,20 @@ export function CatalogManagementView() {
 
   const handleConfirmDelete = async () => {
     if (!deletingProduct) return;
-    await deleteProductMutation.mutateAsync(deletingProduct.parentSku);
-    setDeletingProduct(null);
+    try {
+      const res = await deleteProductMutation.mutateAsync(deletingProduct.parentSku);
+      toast.success(
+        res?.archived
+          ? `${deletingProduct.parentSku} arşivlendi (sipariş/sepet bağlantısı bulunduğu için).`
+          : `${deletingProduct.parentSku} silindi.`
+      );
+      setDeletingProduct(null);
+    } catch (err) {
+      const msg = formatPublishError(err);
+      setPublishError(msg);
+      toast.error(msg);
+      setDeletingProduct(null);
+    }
   };
 
   return (
@@ -256,12 +272,21 @@ export function CatalogManagementView() {
                   <TableRow key={product.parentSku}>
                     <TableCell className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={thumbUrl}
-                          alt={product.title}
-                          referrerPolicy="no-referrer"
-                          className="w-11 h-11 rounded-md object-cover bg-muted border border-border shrink-0"
-                        />
+                        {thumbUrl && !failedThumbs[product.parentSku] ? (
+                          <img
+                            src={thumbUrl}
+                            alt={product.title}
+                            referrerPolicy="no-referrer"
+                            onError={() =>
+                              setFailedThumbs((prev) => ({ ...prev, [product.parentSku]: true }))
+                            }
+                            className="w-11 h-11 rounded-md object-cover bg-muted border border-border shrink-0"
+                          />
+                        ) : (
+                          <div className="w-11 h-11 rounded-md bg-muted border border-border shrink-0 flex items-center justify-center text-muted-foreground">
+                            <ImageIcon className="w-4 h-4" />
+                          </div>
+                        )}
                         <div>
                           <div className="font-medium text-foreground">{product.title}</div>
                           <div className="font-mono text-[11px] text-muted-foreground">
@@ -297,15 +322,20 @@ export function CatalogManagementView() {
                       </div>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right whitespace-nowrap">
-                      <span
-                        className="font-mono tabular-nums text-foreground"
-                        title={product.stockStatus}
+                      <button
+                        type="button"
+                        onClick={() => setQuickStockProduct(product)}
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted font-mono tabular-nums text-foreground transition-colors cursor-pointer"
+                        title="Hızlı stok gir / düzelt / sıfırla"
                         aria-label={`${product.parentSku} stok adedi`}
                       >
-                        {product.stockStatus === 'Siparişe Özel'
-                          ? '—'
-                          : `${formatTrNumber(product.stockQty ?? 0, 0)} adet`}
-                      </span>
+                        <span>
+                          {product.stockStatus === 'Siparişe Özel'
+                            ? 'Siparişe Özel'
+                            : `${formatTrNumber(product.stockQty ?? 0, 0)} adet`}
+                        </span>
+                        <Pencil className="w-3 h-3 text-muted-foreground" />
+                      </button>
                     </TableCell>
                     <TableCell className="px-4 py-3 text-right font-mono tabular-nums text-foreground whitespace-nowrap">
                       {formatTrNumber(metrics.fireIncludedFineMetalGram, 4)} gr
@@ -340,11 +370,15 @@ export function CatalogManagementView() {
                             try {
                               if (isPublished) {
                                 await unpublishProductMutation.mutateAsync(product.parentSku);
+                                toast.success(`${product.parentSku} taslağa alındı.`);
                               } else {
                                 await publishProductMutation.mutateAsync(product.parentSku);
+                                toast.success(`${product.parentSku} yayına alındı.`);
                               }
                             } catch (err) {
-                              setPublishError(formatPublishError(err));
+                              const msg = formatPublishError(err);
+                              setPublishError(msg);
+                              toast.error(msg);
                             }
                           }}
                         >
@@ -425,7 +459,7 @@ export function CatalogManagementView() {
                             className="h-8 w-8"
                             data-delete="true"
                             title="Modeli sil"
-                            disabled={products.length <= 1}
+                            disabled={deleteProductMutation.isPending}
                             onClick={() => setDeletingProduct(product)}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -476,6 +510,14 @@ export function CatalogManagementView() {
           confirmLabel="Kalıcı Sil"
           cancelLabel="Vazgeç"
           onConfirm={handleConfirmDelete}
+        />
+
+        <QuickStockModal
+          product={quickStockProduct}
+          open={Boolean(quickStockProduct)}
+          onOpenChange={(open) => {
+            if (!open) setQuickStockProduct(null);
+          }}
         />
       </div>
     </CapabilityGate>

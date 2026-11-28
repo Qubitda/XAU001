@@ -253,8 +253,10 @@ def record_manual_stock_movement(
     """
     from apps.audit.services import record_audit
 
-    if quantity <= 0:
+    if movement_type != "SET" and quantity <= 0:
         raise DomainError("Hareket adedi pozitif bir tam sayı olmalıdır.", code="INVALID_QTY", status_code=400)
+    if quantity < 0:
+        raise DomainError("Stok adedi negatif olamaz.", code="INVALID_QTY", status_code=400)
     if not warehouse.is_active:
         raise DomainError("Pasif depoda stok hareketi yapılamaz.", code="WAREHOUSE_INACTIVE", status_code=400)
 
@@ -278,14 +280,15 @@ def record_manual_stock_movement(
             raise DomainError("Bu referans için çözülecek aktif rezervasyon bulunamadı.", code="RESERVATION_NOT_FOUND", status_code=404)
         return mv
 
-    existing = StockMovement.objects.filter(
-        variant=variant,
-        warehouse=warehouse,
-        reference_no=ref,
-        movement_type=movement_type,
-    ).first()
-    if existing is not None:
-        return existing
+    if movement_type != "SET":
+        existing = StockMovement.objects.filter(
+            variant=variant,
+            warehouse=warehouse,
+            reference_no=ref,
+            movement_type=movement_type,
+        ).first()
+        if existing is not None:
+            return existing
 
     ws, _ = WarehouseStock.objects.select_for_update().get_or_create(
         variant=variant,
@@ -294,7 +297,20 @@ def record_manual_stock_movement(
     )
 
     prev_qty = ws.quantity
-    if movement_type == StockMovement.MovementType.INBOUND:
+    effective_movement_type = movement_type
+    if movement_type == "SET":
+        if quantity < ws.reserved_qty:
+            raise DomainError(
+                f"Rezerve edilmiş stok ({ws.reserved_qty}) altına düşülemez.",
+                code="INSUFFICIENT_STOCK",
+                status_code=409,
+            )
+        delta = quantity - prev_qty
+        ws.quantity = quantity
+        effective_movement_type = (
+            StockMovement.MovementType.INBOUND if delta >= 0 else StockMovement.MovementType.SHIP
+        )
+    elif movement_type == StockMovement.MovementType.INBOUND:
         ws.quantity += quantity
         delta = quantity
     elif movement_type == StockMovement.MovementType.SHIP:
@@ -314,7 +330,7 @@ def record_manual_stock_movement(
         product=variant.product,
         variant=variant,
         warehouse=warehouse,
-        movement_type=movement_type,
+        movement_type=effective_movement_type,
         quantity_delta=delta,
         reference_no=ref,
         actor=actor,

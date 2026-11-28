@@ -51,10 +51,10 @@ export function PricingFeatureView() {
   const { setSelectedParentSku } = usePortalSelection();
   const updateProductMutation = useUpdateProductMutation();
   const [recipeInfo, setRecipeInfo] = useState<RecipeSnapshotInfo | null>(null);
-  const [localRates, setLocalRates] = useState<LiveRates | null>(null);
+  const [previewSnapshotRates, setPreviewSnapshotRates] = useState(false);
 
   useEffect(() => {
-    setLocalRates(null);
+    setPreviewSnapshotRates(false);
     setRecipeInfo(null);
     if (!activeProduct?.parentSku) return;
     let active = true;
@@ -65,22 +65,6 @@ export function PricingFeatureView() {
         if (!active) return;
         const rec = (res.data ?? [])[0] ?? null;
         setRecipeInfo(rec);
-        const snapFx = rec?.appliedRatesSnapshot?.fxBaseRates;
-        if (snapFx && Object.keys(snapFx).length > 0) {
-          const parsedFx: Record<string, number> = { ...rates.fxBaseRates };
-          for (const [k, v] of Object.entries(snapFx)) {
-            parsedFx[k] = Number(v) || parsedFx[k] || 0;
-          }
-          const hasGold = Number(rec.appliedRatesSnapshot?.liveHasGoldTrySell) || rates.liveHasGoldTrySell;
-          setLocalRates({
-            ...rates,
-            snapshotId: rec.sourceMatrixVersion ? `Matris v${rec.sourceMatrixVersion} (Snapshot)` : rates.snapshotId,
-            liveUsdSell: parsedFx.USD ?? rates.liveUsdSell,
-            liveEurSell: parsedFx.EUR ?? rates.liveEurSell,
-            liveHasGoldTrySell: hasGold,
-            fxBaseRates: parsedFx as LiveRates['fxBaseRates'],
-          });
-        }
       })
       .catch(() => {});
     return () => {
@@ -88,10 +72,30 @@ export function PricingFeatureView() {
     };
   }, [activeProduct?.parentSku]);
 
-  const effectiveRates = localRates ?? rates;
+  const snapshotRates = useMemo<LiveRates | null>(() => {
+    const snapFx = recipeInfo?.appliedRatesSnapshot?.fxBaseRates;
+    if (!snapFx || Object.keys(snapFx).length === 0) return null;
+    const parsedFx: Record<string, number> = { ...rates.fxBaseRates };
+    for (const [k, v] of Object.entries(snapFx)) {
+      parsedFx[k] = Number(v) || parsedFx[k] || 0;
+    }
+    const hasGold = Number(recipeInfo?.appliedRatesSnapshot?.liveHasGoldTrySell) || rates.liveHasGoldTrySell;
+    return {
+      ...rates,
+      snapshotId: recipeInfo?.sourceMatrixVersion
+        ? `Matris v${recipeInfo.sourceMatrixVersion} (Snapshot)`
+        : rates.snapshotId,
+      liveUsdSell: parsedFx.USD ?? rates.liveUsdSell,
+      liveEurSell: parsedFx.EUR ?? rates.liveEurSell,
+      liveHasGoldTrySell: hasGold,
+      fxBaseRates: parsedFx as LiveRates['fxBaseRates'],
+    };
+  }, [recipeInfo, rates]);
+
+  const effectiveRates = previewSnapshotRates && snapshotRates ? snapshotRates : rates;
   const effectiveComputed = useMemo(
-    () => (localRates ? computeJewelryMetrics(product, localRates) : computed),
-    [localRates, product, computed]
+    () => (previewSnapshotRates && snapshotRates ? computeJewelryMetrics(product, snapshotRates) : computed),
+    [previewSnapshotRates, snapshotRates, product, computed]
   );
 
   const handleUpdateProduct = (patch: Partial<ProductState>) => {
@@ -234,6 +238,16 @@ export function PricingFeatureView() {
                 </SelectContent>
               </Select>
             </div>
+            {snapshotRates && (
+              <Button
+                type="button"
+                variant={previewSnapshotRates ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPreviewSnapshotRates((prev) => !prev)}
+              >
+                {previewSnapshotRates ? 'Canlı Kura Dön' : 'Snapshot Kuruyla Önizle'}
+              </Button>
+            )}
             <Button variant="outline" size="sm" asChild>
               <Link to={`/urun/${product.parentSku}`}>
                 Ürünü Vitrinde Gör
