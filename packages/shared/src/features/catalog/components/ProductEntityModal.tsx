@@ -474,6 +474,9 @@ export function ProductEntityModal({
   onSaved,
 }: ProductEntityModalProps) {
   const [activeTab, setActiveTab] = useState<ProductModalTab>(initialTab);
+  const [createdProduct, setCreatedProduct] = useState<ProductState | null>(null);
+  const effectiveMode: 'create' | 'edit' = createdProduct ? 'edit' : mode;
+  const effectiveProduct = createdProduct ?? initialProduct;
   const [baseline, setBaseline] = useState<ProductState>(() =>
     cloneProductDraft(mode, initialProduct)
   );
@@ -559,6 +562,7 @@ export function ProductEntityModal({
 
   useEffect(() => {
     if (open) {
+      setCreatedProduct(null);
       const next = cloneProductDraft(mode, initialProduct);
       setBaseline(next);
       setDraft(next);
@@ -653,7 +657,7 @@ export function ProductEntityModal({
   const liveComputed = useMemo(() => computeJewelryMetrics(draft, rates), [draft, rates]);
   const baselineComputed = useMemo(() => computeJewelryMetrics(baseline, rates), [baseline, rates]);
   const hasPriceAffectingChange = useMemo(() => {
-    if (mode !== 'edit') return false;
+    if (effectiveMode !== 'edit') return false;
     return (
       draft.pricingMode !== baseline.pricingMode ||
       Number(draft.grossWeightGram) !== Number(baseline.grossWeightGram) ||
@@ -831,7 +835,7 @@ export function ProductEntityModal({
   };
 
   const handleSubmit = async (targetStatus?: CatalogStatus, bypassPriceConfirm = false) => {
-    if (mode === 'edit' && initialProduct && hasPriceAffectingChange && !bypassPriceConfirm) {
+    if (effectiveMode === 'edit' && effectiveProduct && hasPriceAffectingChange && !bypassPriceConfirm) {
       setPendingPriceConfirmStatus(targetStatus);
       setPriceConfirmOpen(true);
       return;
@@ -928,7 +932,7 @@ export function ProductEntityModal({
     };
 
     try {
-      if (mode === 'create') {
+      if (effectiveMode === 'create') {
         // POST never creates ACTIVE directly; always create as DRAFT then run publish gate if requested.
         const createPayload: ProductState = {
           ...payload,
@@ -960,6 +964,8 @@ export function ProductEntityModal({
             onSaved?.({ ...created, catalogStatus: pubRes.catalogStatus as CatalogStatus });
             onOpenChange(false);
           } catch (pubErr) {
+            setCreatedProduct(created);
+            setBaseline(cloneProductDraft('edit', created));
             onSaved?.(created);
             setServerError(
               `Ürün taslak olarak kaydedildi ancak yayınlanamadı: ${formatPublishError(pubErr)}`
@@ -969,8 +975,8 @@ export function ProductEntityModal({
         }
         onSaved?.(created);
         onOpenChange(false);
-      } else if (initialProduct) {
-        const wasPublished = initialProduct.catalogStatus === 'ACTIVE';
+      } else if (effectiveProduct) {
+        const wasPublished = effectiveProduct.catalogStatus === 'ACTIVE';
         const wantsPublish = resolvedStatus === 'ACTIVE' && !wasPublished;
         const wantsUnpublish = resolvedStatus === 'DRAFT' && wasPublished;
         const {
@@ -983,12 +989,12 @@ export function ProductEntityModal({
             ? patchBase
             : { ...patchBase, catalogStatus: resolvedStatus };
         const updated = await updateMutation.mutateAsync({
-          parentSku: initialProduct.parentSku,
+          parentSku: effectiveProduct.parentSku,
           patch: patchPayload,
         });
         if (wantsPublish) {
           try {
-            const pubRes = await publishMutation.mutateAsync(initialProduct.parentSku);
+            const pubRes = await publishMutation.mutateAsync(effectiveProduct.parentSku);
             onSaved?.({ ...updated, catalogStatus: pubRes.catalogStatus as CatalogStatus });
             onOpenChange(false);
           } catch (pubErr) {
@@ -998,7 +1004,7 @@ export function ProductEntityModal({
           return;
         }
         if (wantsUnpublish) {
-          const unpubRes = await unpublishMutation.mutateAsync(initialProduct.parentSku);
+          const unpubRes = await unpublishMutation.mutateAsync(effectiveProduct.parentSku);
           onSaved?.({ ...updated, catalogStatus: unpubRes.catalogStatus as CatalogStatus });
           onOpenChange(false);
           return;
@@ -1258,7 +1264,7 @@ export function ProductEntityModal({
                 <Input
                   type="text"
                   value={draft.parentSku}
-                  disabled={mode === 'edit'}
+                  disabled={effectiveMode === 'edit'}
                   onChange={(e) => patchDraft('parentSku', e.target.value)}
                   placeholder="Örn. SE055"
                   className="font-mono"
@@ -1872,7 +1878,7 @@ export function ProductEntityModal({
             productKind={resolveProductKind(draft)}
             purityOptions={purityOptions.map((o) => o.value)}
             colorOptions={colorOptions.map((o) => o.value)}
-            mode={mode}
+            mode={effectiveMode}
             pendingMatrix={pendingMatrix}
             onPendingMatrixChange={setPendingMatrix}
           />
@@ -1881,7 +1887,7 @@ export function ProductEntityModal({
         {activeTab === 'stok' && (
           <ProductStockPanel
             parentSku={draft.parentSku}
-            mode={mode}
+            mode={effectiveMode}
             catalogStockQty={draft.stockQty}
             onInitialStockQtyChange={(qty) => patchDraft('stockQty', qty)}
             stockStatus={draft.stockStatus}
