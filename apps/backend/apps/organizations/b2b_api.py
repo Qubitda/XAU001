@@ -17,7 +17,7 @@ from apps.audit.services import record_audit
 from apps.authorization.permissions import IsB2bOrganizationMember
 from apps.common.responses import envelope_response
 from apps.organizations.models import Organization, OrganizationMembership as Membership
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 from config.exceptions import DomainError
 
 User = get_user_model()
@@ -178,7 +178,7 @@ class B2bOrganizationUsersView(APIView):
         if ctx is None or ctx.organization is None:
             raise DomainError("Aktif bayi organizasyonu bulunamadı.", code="ORG_REQUIRED", status_code=400)
         members = (
-            Membership.objects.filter(organization=ctx.organization)
+            scope_queryset_to_organization(Membership.objects.all(), ctx)
             .select_related("user")
             .order_by("-created_at")
         )
@@ -223,8 +223,8 @@ class B2bOrganizationUserDetailView(APIView):
     def patch(self, request: Request, membership_id: str):
         ctx = _require_org_admin(request)
         membership = (
-            Membership.objects.select_related("user")
-            .filter(id=membership_id, organization=ctx.organization)
+            scope_queryset_to_organization(Membership.objects.select_related("user"), ctx)
+            .filter(id=membership_id)
             .first()
         )
         if membership is None:
