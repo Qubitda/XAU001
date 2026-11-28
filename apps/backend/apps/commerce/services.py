@@ -1,3 +1,4 @@
+import logging
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
@@ -26,6 +27,8 @@ from apps.production.models import WorkOrder
 from apps.webhooks.services import emit_webhook_event
 from config.exceptions import DomainError
 from .models import B2bDraftLine, B2bOrder, B2bOrderLine, B2cCartItem, B2cOrder, B2cOrderItem
+
+logger = logging.getLogger(__name__)
 
 
 def _schedule_b2c_order_created_webhook(order: B2cOrder) -> None:
@@ -63,6 +66,106 @@ def _emit_b2c_payment_success_mail(order: B2cOrder) -> None:
         date=timezone.localtime(order.updated_at).strftime("%d.%m.%Y %H:%M"),
         order_url=f"{base}/hesabim/siparisler/{order.order_no}",
     )
+
+
+def _dispatch_in_app_order_notification(*, user_id, title: str, body: str) -> None:
+    if not user_id:
+        return
+    uid = str(user_id)
+
+    def _enqueue() -> None:
+        from django.conf import settings as dj_settings
+
+        from apps.notifications.tasks import send_order_notification
+
+        if getattr(dj_settings, "TESTING", False) or getattr(dj_settings, "CELERY_TASK_ALWAYS_EAGER", False):
+            send_order_notification(uid, title, body)
+            return
+        try:
+            send_order_notification.delay(uid, title, body)
+        except Exception:
+            logger.exception("send_order_notification.delay failed; falling back inline user=%s", uid)
+            send_order_notification(uid, title, body)
+
+    transaction.on_commit(_enqueue)
+
+
+def _emit_b2c_order_created_mail(order: B2cOrder) -> None:
+    try:
+        from django.conf import settings as dj_settings
+
+        from apps.mail.events import emit_order_created
+
+        recipient = (order.shipping_email or getattr(order.customer, "email", "") or "").strip()
+        if not recipient:
+            return
+        base = (getattr(dj_settings, "FRONTEND_STOREFRONT_URL", "") or "http://localhost:3000").rstrip("/")
+        emit_order_created(
+            recipient=recipient,
+            customer_name=order.shipping_full_name or getattr(order.customer, "full_name", "") or "",
+            order_no=order.order_no,
+            amount=str(order.grand_total_try),
+            currency="TRY",
+            date=timezone.localtime(order.created_at).strftime("%d.%m.%Y %H:%M"),
+            order_url=f"{base}/hesabim/siparisler/{order.order_no}",
+        )
+    except Exception:
+        logger.exception("B2C order_created mail failed order=%s", order.order_no)
+
+
+def _emit_b2b_order_created_mail(order: B2bOrder) -> None:
+    try:
+        from django.conf import settings as dj_settings
+
+        from apps.mail.events import emit_order_created
+
+        recipient = (
+            getattr(order.created_by, "email", "")
+            or getattr(order.organization, "email", "")
+            or ""
+        ).strip()
+        if not recipient:
+            return
+        base = (getattr(dj_settings, "FRONTEND_STOREFRONT_URL", "") or "http://localhost:3001").rstrip("/")
+        emit_order_created(
+            recipient=recipient,
+            customer_name=order.contact_person or getattr(order.organization, "name", "") or "",
+            order_no=order.order_no,
+            amount=str(order.total_wholesale_usd),
+            currency="USD",
+            date=timezone.localtime(order.created_at).strftime("%d.%m.%Y %H:%M"),
+            order_url=f"{base}/b2b/siparisler",
+            organization_id=str(order.organization_id),
+        )
+    except Exception:
+        logger.exception("B2B order_created mail failed order=%s", order.order_no)
+
+
+def _emit_order_cancelled_notifications(
+    *,
+    order_no: str,
+    recipient: str,
+    customer_name: str,
+    user_id=None,
+    organization_id: str | None = None,
+) -> None:
+    try:
+        from apps.mail.events import emit_order_cancelled
+
+        if (recipient or "").strip():
+            emit_order_cancelled(
+                recipient=recipient.strip(),
+                customer_name=customer_name,
+                order_no=order_no,
+                organization_id=organization_id,
+            )
+        _dispatch_in_app_order_notification(
+            user_id=user_id,
+            title=f"Sipariş İptal Edildi · {order_no}",
+            body=f"{order_no} numaralı siparişiniz iptal edilmiştir.",
+        )
+    except Exception:
+        logger.exception("order_cancelled notification failed order=%s", order_no)
 
 
 def _schedule_b2b_order_created_webhook(order: B2bOrder) -> None:
@@ -846,6 +949,7 @@ def submit_b2c_order(*, user, payload: dict, awaiting_payment: bool = False) -> 
     )
     if not awaiting_payment:
         _schedule_b2c_order_created_webhook(order)
+        _emit_b2c_order_created_mail(order)
         _record_social_commerce_order_hooks(order=order, payload=payload)
     return order
 
@@ -1199,6 +1303,7 @@ def submit_b2b_order(
         },
     )
     _schedule_b2b_order_created_webhook(order)
+    _emit_b2b_order_created_mail(order)
     return order
 
 
@@ -1277,6 +1382,13 @@ def transition_b2c_order_status(*, order_no: str, next_status: str, actor=None) 
         actor=actor,
         metadata={"from": prev_status, "to": next_status},
     )
+    if next_status == B2cOrder.Status.CANCELLED:
+        _emit_order_cancelled_notifications(
+            order_no=order.order_no,
+            recipient=(order.shipping_email or getattr(order.customer, "email", "") or ""),
+            customer_name=order.shipping_full_name or getattr(order.customer, "full_name", "") or "",
+            user_id=order.created_by_id,
+        )
     return order
 
 
@@ -1363,6 +1475,14 @@ def transition_b2b_order_status(*, order_no: str, next_status: str, actor=None) 
         metadata={"from": prev_status, "to": next_status},
     )
     _schedule_b2b_order_status_webhook(order=order, previous=prev_status, current=next_status)
+    if next_status == B2bOrder.Status.CANCELLED:
+        _emit_order_cancelled_notifications(
+            order_no=order.order_no,
+            recipient=(getattr(order.created_by, "email", "") or getattr(order.organization, "email", "") or ""),
+            customer_name=order.contact_person or getattr(order.organization, "name", "") or "",
+            user_id=order.created_by_id,
+            organization_id=str(order.organization_id),
+        )
     return order
 
 
