@@ -103,9 +103,9 @@ class StockMovement(TimestampedModel):
         RELEASE = "RELEASE", "Rezervasyon İptali"
         SHIP = "SHIP", "Sevkiyat Çıkışı"
 
-    product = models.ForeignKey(ProductModel, on_delete=models.PROTECT, related_name="stock_movements")
+    product = models.ForeignKey(ProductModel, on_delete=models.CASCADE, related_name="stock_movements")
     variant = models.ForeignKey(
-        ProductVariant, on_delete=models.PROTECT, null=True, blank=True, related_name="stock_movements"
+        ProductVariant, on_delete=models.CASCADE, null=True, blank=True, related_name="stock_movements"
     )
     warehouse = models.ForeignKey(
         Warehouse, on_delete=models.PROTECT, null=True, blank=True, related_name="stock_movements"
