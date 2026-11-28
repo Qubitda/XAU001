@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from django.db.models import Q
 from apps.authorization.constants import OPS_ROLES, ROLE_PERMISSIONS
 from config.exceptions import DomainError
 from .models import Branch, Organization, OrganizationMembership
@@ -338,3 +339,55 @@ def assert_branch_in_tenant_scope(branch: Branch | None, ctx: TenantContext) -> 
             code="BRANCH_ACCESS_DENIED",
             status_code=403,
         )
+
+
+def scope_queryset_to_organization(
+    qs,
+    ctx: TenantContext,
+    *,
+    org_field: str = "organization",
+    include_shared: bool = False,
+):
+    """
+    Centralized organization tenant-scoping helper.
+    - OPS (`ctx.is_ops=True`) sees the full queryset untouched.
+    - Non-OPS with `ctx.organization is None` gets `qs.none()` (or shared-only when `include_shared=True`).
+    - Non-OPS with an organization is restricted to `ctx.organization` (plus `org_field=None` if `include_shared=True`).
+    """
+    if ctx.is_ops:
+        return qs
+    if ctx.organization is None:
+        if include_shared:
+            return qs.filter(**{f"{org_field}__isnull": True})
+        return qs.none()
+    if include_shared:
+        return qs.filter(Q(**{f"{org_field}__isnull": True}) | Q(**{org_field: ctx.organization}))
+    return qs.filter(**{org_field: ctx.organization})
+
+
+def scope_queryset_to_branch(
+    qs,
+    ctx: TenantContext,
+    *,
+    branch_field: str = "branch",
+    include_unassigned: bool = False,
+):
+    """
+    Centralized branch tenant-scoping helper.
+    - OPS (`ctx.is_ops=True`) sees the full queryset untouched.
+    - Non-OPS with `ctx.membership is None` gets `qs.none()`.
+    - Restricts queryset to branches returned by `get_authorized_branches(ctx.membership)`.
+    - When `include_unassigned=True`, nullable `branch_field=None` rows are also included.
+    """
+    if ctx.is_ops:
+        return qs
+    if ctx.membership is None:
+        return qs.none()
+    allowed_ids = [b.id for b in get_authorized_branches(ctx.membership)]
+    if not allowed_ids:
+        if include_unassigned:
+            return qs.filter(**{f"{branch_field}__isnull": True})
+        return qs.none()
+    if include_unassigned:
+        return qs.filter(Q(**{f"{branch_field}__isnull": True}) | Q(**{f"{branch_field}_id__in": allowed_ids}))
+    return qs.filter(**{f"{branch_field}_id__in": allowed_ids})
