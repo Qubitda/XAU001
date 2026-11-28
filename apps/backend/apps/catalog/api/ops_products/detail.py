@@ -61,7 +61,7 @@ class OpsProductDetailView(APIView):
             and product.catalog_status != ProductModel.CatalogStatus.ACTIVE
         ):
             raise DomainError(
-                "Ürünü yayına almak için /api/v1/ops/products/<sku>/publish endpoint'ini kullanın.",
+                "Ürün düzenleme kaydıyla doğrudan yayına alınamaz; lütfen Yayınla butonunu kullanın.",
                 code="USE_PUBLISH_ENDPOINT",
                 status_code=400,
             )

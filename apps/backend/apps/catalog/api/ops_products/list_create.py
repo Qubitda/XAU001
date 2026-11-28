@@ -67,7 +67,7 @@ class OpsProductListCreateView(APIView):
         _enforce_field_permissions(ctx, {k: v for k, v in request.data.items() if k in FIELD_PERMISSIONS})
         if str(request.data.get("catalogStatus") or "").upper() == ProductModel.CatalogStatus.ACTIVE:
             raise DomainError(
-                "Yeni ürün doğrudan ACTIVE olarak oluşturulamaz. Önce taslak oluşturup /api/v1/ops/products/<sku>/publish endpoint'ini kullanın.",
+                "Yeni ürün doğrudan yayında oluşturulamaz. Önce taslak olarak kaydedip Yayınla butonunu kullanın.",
                 code="USE_PUBLISH_ENDPOINT",
                 status_code=400,
             )
