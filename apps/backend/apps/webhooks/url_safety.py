@@ -33,12 +33,12 @@ def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     )
 
 
-def validate_webhook_url(url: str, *, allow_http: bool | None = None) -> str:
+def resolve_and_validate_webhook_url(
+    url: str, *, allow_http: bool | None = None
+) -> tuple[str, str, str, int]:
     """
-    Validate operator-supplied webhook URL before persist / delivery.
-    - https required (http only when DEBUG / allow_http)
-    - no credentials in URL
-    - hostname must resolve to non-private addresses
+    Validate operator-supplied webhook URL and return (url, pinned_ip, host, port)
+    so callers can pin the TCP connection to the validated IP (prevents DNS-rebinding TOCTOU).
     """
     raw = (url or "").strip()
     if not raw:
@@ -112,6 +112,7 @@ def validate_webhook_url(url: str, *, allow_http: bool | None = None) -> str:
             status_code=400,
         )
 
+    pinned_ip: str | None = None
     for info in addrinfos:
         ip_str = info[4][0]
         try:
@@ -124,5 +125,26 @@ def validate_webhook_url(url: str, *, allow_http: bool | None = None) -> str:
                 code="WEBHOOK_URL_BLOCKED",
                 status_code=400,
             )
+        if pinned_ip is None:
+            pinned_ip = str(ip)
 
-    return raw
+    if pinned_ip is None:
+        raise DomainError(
+            "Webhook URL host çözümlenemedi.",
+            code="WEBHOOK_URL_UNRESOLVABLE",
+            status_code=400,
+        )
+
+    effective_port = port or (443 if scheme == "https" else 80)
+    return raw, pinned_ip, host, effective_port
+
+
+def validate_webhook_url(url: str, *, allow_http: bool | None = None) -> str:
+    """
+    Validate operator-supplied webhook URL before persist / delivery.
+    - https required (http only when DEBUG / allow_http)
+    - no credentials in URL
+    - hostname must resolve to non-private addresses
+    """
+    validated_url, _, _, _ = resolve_and_validate_webhook_url(url, allow_http=allow_http)
+    return validated_url

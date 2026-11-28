@@ -1,14 +1,17 @@
 import hashlib
 import hmac
+import http.client
 import json
 import logging
+import socket
+import ssl
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
 from django.utils import timezone
 
 from .models import PLATFORM_WEBHOOK_EVENTS, WEBHOOK_EVENTS, WebhookEndpoint
-from .url_safety import validate_webhook_url
+from .url_safety import resolve_and_validate_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,30 @@ class _NoRedirect(urlrequest.HTTPRedirectHandler):
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
         raise urlerror.HTTPError(req.full_url, code, f"Redirect blocked ({code})", headers, fp)
+
+
+def _build_pinned_opener(pinned_ip: str, original_host: str, port: int):
+    """Build a urllib opener whose TCP socket connects strictly to `pinned_ip` (anti-DNS-rebinding)."""
+
+    class _PinnedHTTPConnection(http.client.HTTPConnection):
+        def connect(self):
+            self.sock = socket.create_connection((pinned_ip, port), self.timeout, self.source_address)
+
+    class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+        def connect(self):
+            raw_sock = socket.create_connection((pinned_ip, port), self.timeout, self.source_address)
+            ctx = self._context if hasattr(self, "_context") else ssl.create_default_context()
+            self.sock = ctx.wrap_socket(raw_sock, server_hostname=original_host)
+
+    class _PinnedHTTPHandler(urlrequest.HTTPHandler):
+        def http_open(self, req):
+            return self.do_open(_PinnedHTTPConnection, req)
+
+    class _PinnedHTTPSHandler(urlrequest.HTTPSHandler):
+        def https_open(self, req):
+            return self.do_open(_PinnedHTTPSConnection, req, context=self._context)
+
+    return urlrequest.build_opener(_NoRedirect, _PinnedHTTPHandler(), _PinnedHTTPSHandler())
 
 
 _OPENER = urlrequest.build_opener(_NoRedirect)
@@ -37,9 +64,9 @@ def _build_delivery_payload(event: str, data: dict) -> dict:
 
 
 def deliver_webhook_to_endpoint(*, endpoint: WebhookEndpoint, event: str, data: dict) -> None:
-    # Re-validate at delivery time (URL may have been created before guards, or DNS changed).
+    # Re-validate at delivery time and pin resolved IP to eliminate DNS-rebinding TOCTOU.
     try:
-        validate_webhook_url(endpoint.url)
+        validated_url, pinned_ip, host, port = resolve_and_validate_webhook_url(endpoint.url)
     except Exception as exc:
         logger.warning("Webhook %s URL rejected at delivery: %s", endpoint.id, exc)
         return
@@ -48,17 +75,19 @@ def deliver_webhook_to_endpoint(*, endpoint: WebhookEndpoint, event: str, data: 
     body = json.dumps(payload, separators=(",", ":"), default=str).encode("utf-8")
     signature = sign_webhook_body(endpoint.secret, body)
     req = urlrequest.Request(
-        endpoint.url,
+        validated_url,
         data=body,
         headers={
             "Content-Type": "application/json",
+            "Host": host,
             "X-Tara-Signature": signature,
             "User-Agent": "TaraGold-Webhooks/1.0",
         },
         method="POST",
     )
+    opener = _build_pinned_opener(pinned_ip, host, port)
     try:
-        with _OPENER.open(req, timeout=15) as resp:
+        with opener.open(req, timeout=15) as resp:
             if resp.status >= 400:
                 logger.warning(
                     "Webhook %s returned HTTP %s for event %s",
