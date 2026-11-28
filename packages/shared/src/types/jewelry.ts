@@ -372,6 +372,29 @@ export interface ProductState {
     fireIncludedFineMetalGram?: number;
     fineness: number;
   };
+  priceUpdated?: boolean;
+  newPrice?: {
+    defaultVariantSku: string | null;
+    b2cTry: string | null;
+    b2bTry: string | null;
+    b2bLc: string | null;
+    lcCurrency: string;
+    variants: {
+      sku: string;
+      b2cTry: string | null;
+      b2bTry: string | null;
+    }[];
+  } | null;
+  priceHistory?: {
+    id: string;
+    version: number | null;
+    oldB2cTry: string | null;
+    newB2cTry: string | null;
+    oldB2bTry: string | null;
+    newB2bTry: string | null;
+    changedAt: string;
+    changedBy: string;
+  }[];
 }
 
 export type ProductMediaRole =

@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowUpRight,
   Calculator,
   CheckCircle2,
   Diamond,
   EyeOff,
   Globe,
+  History,
   Image as ImageIcon,
   Layers,
   Loader2,
@@ -30,6 +32,7 @@ import {
   withCurrentSelectOption,
 } from '../../../data/productDefaults';
 import { isRenderableMediaUrl } from '../../../data/productMedia';
+import { ConfirmDialog } from '../../../components/crud/ConfirmDialog';
 import { EntityModal } from '../../../components/crud/EntityModal';
 import { Button, Input, Label } from '../../../components/ui';
 import { cn } from '../../../lib/utils';
@@ -479,6 +482,10 @@ export function ProductEntityModal({
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
+  const [priceConfirmOpen, setPriceConfirmOpen] = useState(false);
+  const [pendingPriceConfirmStatus, setPendingPriceConfirmStatus] = useState<CatalogStatus | undefined>(
+    undefined
+  );
   const [newImageUrl, setNewImageUrl] = useState('');
   const [newSizeInput, setNewSizeInput] = useState('');
   const [pendingMatrix, setPendingMatrix] = useState<PendingMatrixConfig>({
@@ -644,6 +651,25 @@ export function ProductEntityModal({
   );
 
   const liveComputed = useMemo(() => computeJewelryMetrics(draft, rates), [draft, rates]);
+  const baselineComputed = useMemo(() => computeJewelryMetrics(baseline, rates), [baseline, rates]);
+  const hasPriceAffectingChange = useMemo(() => {
+    if (mode !== 'edit') return false;
+    return (
+      draft.pricingMode !== baseline.pricingMode ||
+      Number(draft.grossWeightGram) !== Number(baseline.grossWeightGram) ||
+      Number(draft.fireRatePct) !== Number(baseline.fireRatePct) ||
+      draft.purityCode !== baseline.purityCode ||
+      Number(draft.centerStoneCarat) !== Number(baseline.centerStoneCarat) ||
+      Number(draft.sideStoneCarat) !== Number(baseline.sideStoneCarat) ||
+      draft.productKind !== baseline.productKind ||
+      JSON.stringify(draft.ledger) !== JSON.stringify(baseline.ledger) ||
+      JSON.stringify(draft.stoneLines ?? []) !== JSON.stringify(baseline.stoneLines ?? []) ||
+      JSON.stringify(draft.mountSpec ?? null) !== JSON.stringify(baseline.mountSpec ?? null) ||
+      JSON.stringify(draft.finishedDetail ?? null) !== JSON.stringify(baseline.finishedDetail ?? null) ||
+      JSON.stringify(draft.mountingDetail ?? null) !== JSON.stringify(baseline.mountingDetail ?? null) ||
+      JSON.stringify(draft.looseStoneDetail ?? null) !== JSON.stringify(baseline.looseStoneDetail ?? null)
+    );
+  }, [mode, draft, baseline]);
 
   const patchDraft = <K extends keyof ProductState>(key: K, value: ProductState[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -804,7 +830,12 @@ export function ProductEntityModal({
     }));
   };
 
-  const handleSubmit = async (targetStatus?: CatalogStatus) => {
+  const handleSubmit = async (targetStatus?: CatalogStatus, bypassPriceConfirm = false) => {
+    if (mode === 'edit' && initialProduct && hasPriceAffectingChange && !bypassPriceConfirm) {
+      setPendingPriceConfirmStatus(targetStatus);
+      setPriceConfirmOpen(true);
+      return;
+    }
     setServerError(null);
     const parsed = productFormSchema.safeParse({
       parentSku: draft.parentSku,
@@ -2559,6 +2590,14 @@ export function ProductEntityModal({
            =================================================================== */}
         {activeTab === 'fiyatlandirma' && (
           <div className="space-y-5">
+            <div className="flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+              <div>
+                <span className="font-semibold">Otomatik Canlı Fiyat Yayını:</span>{' '}
+                Maliyet, kâr marjı, taş, montür, ağırlık veya ayar alanlarında yapılan değişiklikler kaydedildiğinde ürünün canlı B2B ve B2C fiyatları otomatik olarak güncellenir.
+              </div>
+            </div>
+
             {/* Live Price Calculation Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-muted/50 border border-border rounded-lg p-3.5">
               <div>
@@ -3108,6 +3147,42 @@ export function ProductEntityModal({
                 })}
               </div>
 
+              <div className="space-y-2 border-t border-border pt-4">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <History className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>Fiyat Yayın Geçmişi (Son 5 Değişiklik)</span>
+                </div>
+                {initialProduct?.priceHistory && initialProduct.priceHistory.length > 0 ? (
+                  <div className="border border-border rounded-md divide-y divide-border bg-card text-xs">
+                    {initialProduct.priceHistory.map((h) => (
+                      <div key={h.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {h.version ? (
+                            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                              v{h.version}
+                            </span>
+                          ) : null}
+                          <span className="font-mono tabular-nums text-foreground">
+                            B2C: {h.oldB2cTry ? `${h.oldB2cTry} TL` : '—'} → {h.newB2cTry ? `${h.newB2cTry} TL` : '—'}
+                          </span>
+                          <span className="text-muted-foreground">|</span>
+                          <span className="font-mono tabular-nums text-foreground">
+                            B2B: {h.oldB2bTry ? `${h.oldB2bTry} TL` : '—'} → {h.newB2bTry ? `${h.newB2bTry} TL` : '—'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {new Date(h.changedAt).toLocaleString('tr-TR')} · {h.changedBy}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    Henüz kayıtlı fiyat yayını geçmişi yok.
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end">
                 <Link
                   to="/ops/fiyat-motoru"
@@ -3169,6 +3244,19 @@ export function ProductEntityModal({
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={priceConfirmOpen}
+        onOpenChange={setPriceConfirmOpen}
+        title="Canlı Fiyat Güncellenecek"
+        description={`Fiyatı etkileyen alanlarda değişiklik yaptınız. Eski B2C: ${formatTrNumber(baselineComputed.discountedB2cPriceTry, 0)} TL → Yeni B2C: ${formatTrNumber(liveComputed.discountedB2cPriceTry, 0)} TL | Eski B2B: ${formatTrNumber(baselineComputed.finalB2bPriceTry, 0)} TL → Yeni B2B: ${formatTrNumber(liveComputed.finalB2bPriceTry, 0)} TL${initialProduct?.variants && initialProduct.variants.length > 1 ? ` (${initialProduct.variants.length} varyant dahil)` : ''}. Kaydedildiğinde canlı fiyatlar otomatik olarak yayınlanacaktır. Onaylıyor musunuz?`}
+        confirmLabel="Evet, Kaydet ve Yayınla"
+        cancelLabel="Vazgeç"
+        isLoading={isSubmitting}
+        onConfirm={async () => {
+          setPriceConfirmOpen(false);
+          await handleSubmit(pendingPriceConfirmStatus, true);
+        }}
+      />
     </EntityModal>
   );
 }
