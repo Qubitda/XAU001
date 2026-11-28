@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Calculator, Globe, ImagePlus, Layers, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ProductCardView } from '../../../components/ProductCardView';
 import { ConfirmDialog } from '../../../components/crud/ConfirmDialog';
 import { CapabilityGate, useAuth } from '../../../providers/AuthProvider';
@@ -11,6 +12,7 @@ import {
   useUpdateProductMutation,
 } from '../hooks/useCatalogQueries';
 import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
+import { formatDeleteError } from '../utils/publishMessages';
 import type { MetalColor, ProductState } from '../types';
 import {
   useAddToB2bDraftMutation,
@@ -109,11 +111,21 @@ export function ProductCardFeatureView({ portalMode }: ProductCardFeatureViewPro
   };
 
   const handleConfirmDelete = async () => {
-    await deleteProductMutation.mutateAsync(product.parentSku);
-    const next = products.find((p) => p.parentSku !== product.parentSku);
-    if (next) setSelectedParentSku(next.parentSku);
-    setDeleteOpen(false);
-    navigate(catalogRoute);
+    try {
+      const res = await deleteProductMutation.mutateAsync(product.parentSku);
+      toast.success(
+        res?.archived
+          ? `${product.parentSku} arşivlendi (yayında olduğu veya işlem geçmişi bulunduğu için silinemedi).`
+          : `${product.parentSku} kalıcı olarak silindi.`
+      );
+      const next = products.find((p) => p.parentSku !== product.parentSku);
+      if (next) setSelectedParentSku(next.parentSku);
+      setDeleteOpen(false);
+      navigate(catalogRoute);
+    } catch (err) {
+      toast.error(formatDeleteError(err));
+      setDeleteOpen(false);
+    }
   };
 
   return (

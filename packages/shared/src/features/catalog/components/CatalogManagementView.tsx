@@ -46,7 +46,7 @@ import {
   usePublishProductMutation,
   useUnpublishProductMutation,
 } from '../hooks/useCatalogQueries';
-import { formatPublishError } from '../utils/publishMessages';
+import { formatDeleteError, formatPublishError } from '../utils/publishMessages';
 import { ProductEntityModal, type ProductModalTab } from './ProductEntityModal';
 import { QuickStockModal } from './QuickStockModal';
 import type { ProductState } from '../types';
@@ -152,12 +152,12 @@ export function CatalogManagementView() {
       const res = await deleteProductMutation.mutateAsync(deletingProduct.parentSku);
       toast.success(
         res?.archived
-          ? `${deletingProduct.parentSku} arşivlendi (sipariş/sepet bağlantısı bulunduğu için).`
-          : `${deletingProduct.parentSku} silindi.`
+          ? `${deletingProduct.parentSku} arşivlendi (yayında olduğu veya işlem geçmişi bulunduğu için silinemedi).`
+          : `${deletingProduct.parentSku} kalıcı olarak silindi.`
       );
       setDeletingProduct(null);
     } catch (err) {
-      const msg = formatPublishError(err);
+      const msg = formatDeleteError(err);
       setPublishError(msg);
       toast.error(msg);
       setDeletingProduct(null);
