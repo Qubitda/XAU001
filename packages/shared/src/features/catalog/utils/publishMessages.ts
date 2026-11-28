@@ -27,3 +27,16 @@ export function formatPublishError(err: unknown): string {
   }
   return err.message || 'Ürün yayınlanırken bir hata oluştu.';
 }
+
+export function formatDeleteError(err: unknown): string {
+  if (!(err instanceof ApiClientError)) {
+    return 'Ürün silinirken beklenmeyen bir hata oluştu.';
+  }
+  if (err.status === 403 || err.code === 'PERMISSION_DENIED') {
+    return 'Bu ürünü silme yetkiniz bulunmuyor.';
+  }
+  if (err.status === 404 || err.code === 'PRODUCT_NOT_FOUND') {
+    return 'Silinmek istenen ürün katalogda bulunamadı.';
+  }
+  return err.message || 'Ürün silinemedi. Lütfen tekrar deneyin.';
+}
