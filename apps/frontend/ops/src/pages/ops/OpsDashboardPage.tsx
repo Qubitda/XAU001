@@ -181,7 +181,7 @@ export function OpsDashboardPage() {
                       </div>
                     </TableCell>
                     <TableCell className="px-4 font-mono text-muted-foreground">
-                      Model {product.pricingMode} · {product.ledger.lcCurrency}
+                      Model {product.pricingMode} · {product.ledger?.lcCurrency ?? product.pricingCurrency ?? 'TRY'}
                     </TableCell>
                     <TableCell className="px-4 text-right font-mono tabular-nums text-foreground">
                       {formatTrNumber(metrics.finalB2bPriceCurrency, 2)} {product.pricingCurrency}

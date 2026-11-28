@@ -312,10 +312,10 @@ export function OpsRecipesPage() {
                   </TableCell>
                   <TableCell className="px-4 font-mono text-muted-foreground">Model {p.pricingMode}</TableCell>
                   <TableCell className="px-4 font-sku font-medium text-muted-foreground">
-                    {p.ledger.lcCurrency}
+                    {p.ledger?.lcCurrency ?? p.pricingCurrency ?? 'TRY'}
                   </TableCell>
                   <TableCell className="px-4 text-right font-mono tabular-nums text-muted-foreground">
-                    {p.ledger.channelRules.length} kanal kuralı
+                    {p.ledger?.channelRules?.length ?? 0} kanal kuralı
                   </TableCell>
                   <TableCell className="px-4 text-right font-mono tabular-nums text-foreground">
                     {formatTrNumber(metrics.finalB2bPriceCurrency, 2)} {p.pricingCurrency}
