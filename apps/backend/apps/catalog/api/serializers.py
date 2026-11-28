@@ -67,6 +67,11 @@ def _catalog_card_fields(
     mounting = _safe_detail(product, "mounting_detail")
     loose = _safe_detail(product, "loose_stone_detail")
     metal_detail = finished or mounting
+    resolved_gross_weight = (
+        finished.base_weight_gr
+        if finished is not None
+        else (mounting.net_weight_gr if mounting is not None else product.gross_weight_gram)
+    )
 
     metal_name = (metal_detail.metal_name if metal_detail else "") or product.metal_name
     purity_code = (metal_detail.purity_code if metal_detail else "") or product.purity_code
@@ -98,7 +103,7 @@ def _catalog_card_fields(
         "purityCode": purity_code,
         "metalColor": metal_color,
         "availableColors": product.available_colors or ([metal_color] if metal_color else []),
-        "grossWeightGram": _dec_str(product.gross_weight_gram, GRAM_Q),
+        "grossWeightGram": _dec_str(resolved_gross_weight, GRAM_Q),
         "stockStatus": effective_stock_status,
         "leadTimeDays": product.lead_time_days,
         "stoneType": stone_type,
@@ -265,18 +270,26 @@ def serialize_ops_product(product: ProductModel, recipe: PricingRecipe | None, r
         out = variant_outputs[default_v.id]
     else:
         out = evaluate_recipe(recipe, rates, variant=default_v) if recipe is not None else None
+    finished = _safe_detail(product, "finished_detail")
+    mounting = _safe_detail(product, "mounting_detail")
+    resolved_fire_rate = finished.fire_rate_pct if finished is not None else product.fire_rate_pct
+    resolved_net_fallback = (
+        finished.base_weight_gr
+        if finished is not None
+        else (mounting.net_weight_gr if mounting is not None else product.gross_weight_gram)
+    )
     data.update(
         {
             "supplierName": product.supplier_name,
             "warehouseLocation": product.warehouse_location,
             "ownershipType": product.ownership_type,
-            "fireRatePct": _dec_str(product.fire_rate_pct, DIM_Q),
+            "fireRatePct": _dec_str(resolved_fire_rate, DIM_Q),
             "pricingMode": recipe.pricing_mode if recipe else "1",
             "pricingCurrency": recipe.lc_currency if recipe else "TRY",
             "recipeId": str(recipe.id) if recipe else None,
             "variants": ops_variants,
             "metalSummary": {
-                "netMetalGram": _dec_str(out.net_metal_gram, GRAM_Q) if out else _dec_str(product.gross_weight_gram, GRAM_Q),
+                "netMetalGram": _dec_str(out.net_metal_gram, GRAM_Q) if out else _dec_str(resolved_net_fallback, GRAM_Q),
                 "fineMetalGram": _dec_str(out.fine_metal_gram, GRAM_Q) if out else "0.0000",
                 "fireIncludedFineMetalGram": _dec_str(out.fire_included_fine_metal_gram, GRAM_Q) if out else "0.0000",
                 "fineness": _dec_str(out.fineness, FINENESS_Q) if out else "0.585",

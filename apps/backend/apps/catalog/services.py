@@ -17,7 +17,14 @@ def validate_publishable(product: ProductModel) -> list[str]:
         missing.append("TITLE_REQUIRED")
     if not (product.category or "").strip():
         missing.append("CATEGORY_REQUIRED")
-    if product.gross_weight_gram is None or product.gross_weight_gram < Decimal("0.01"):
+    finished = getattr(product, "finished_detail", None) if hasattr(product, "finished_detail") else None
+    mounting = getattr(product, "mounting_detail", None) if hasattr(product, "mounting_detail") else None
+    effective_weight = (
+        finished.base_weight_gr
+        if finished is not None
+        else (mounting.net_weight_gr if mounting is not None else product.gross_weight_gram)
+    )
+    if effective_weight is None or effective_weight < Decimal("0.01"):
         missing.append("GROSS_WEIGHT_REQUIRED")
     if not PricingRecipe.objects.filter(
         product=product, status=PricingRecipe.Status.PUBLISHED
