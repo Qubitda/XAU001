@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from apps.authorization.permissions import IsB2bOrganizationMember
 from apps.catalog.models import ProductModel
 from apps.common.responses import envelope_response
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 
 from ..models import SocialCampaign
 from ..services import SocialCommerceError, build_b2b_social_catalog_items, build_b2b_social_product_dto
@@ -38,8 +38,11 @@ class B2bSocialShareLinkView(APIView):
         if ctx.organization is None:
             raise Http404("Aktif bayi organizasyonu bulunamadı.")
         product = get_object_or_404(
-            ProductModel.objects.filter(
-                Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization)
+            scope_queryset_to_organization(
+                ProductModel.objects.all(),
+                ctx,
+                org_field="owner_organization",
+                include_shared=True,
             ),
             parent_sku=parent_sku,
             catalog_status=ProductModel.CatalogStatus.ACTIVE,
@@ -65,8 +68,11 @@ class B2bSocialCampaignListView(APIView):
         ctx = resolve_tenant_context(request)
         now = timezone.now()
         qs = (
-            SocialCampaign.objects.filter(is_active=True, audience="B2B")
-            .filter(Q(organization__isnull=True) | Q(organization=ctx.organization))
+            scope_queryset_to_organization(
+                SocialCampaign.objects.filter(is_active=True, audience="B2B"),
+                ctx,
+                include_shared=True,
+            )
             .filter(Q(starts_at__isnull=True) | Q(starts_at__lte=now))
             .filter(Q(ends_at__isnull=True) | Q(ends_at__gte=now))[:50]
         )
