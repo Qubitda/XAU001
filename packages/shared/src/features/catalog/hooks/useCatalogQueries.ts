@@ -43,13 +43,6 @@ export function useLiveRatesQuery() {
   });
 }
 
-export function useBuyerQuoteMutation() {
-  return useMutation({
-    mutationFn: (params: { parentSku: string; channel: 'B2B' | 'B2C'; size?: number }) =>
-      catalogService.requestQuote(params),
-  });
-}
-
 export function useCreateProductMutation() {
   const queryClient = useQueryClient();
   return useMutation({
