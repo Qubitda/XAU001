@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from apps.api_keys.permissions import HasApiScopeRead, HasApiScopeWrite
 from apps.common.responses import apply_safe_ordering, envelope_response, paginated_envelope_response
 from apps.market.services import get_current_rate_snapshot
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 from apps.pricing.models import PricingRecipe
 from config.exceptions import DomainError
 from apps.catalog.models import Favorite, ProductModel
@@ -111,15 +111,14 @@ class FavoriteToggleView(APIView):
             parent_sku=sku,
             catalog_status=ProductModel.CatalogStatus.ACTIVE,
         )
+        qs = scope_queryset_to_organization(qs, ctx, org_field="owner_organization", include_shared=True)
         if not ctx.is_ops:
-            if ctx.organization is not None:
-                ch = "B2B_API" if getattr(request, "api_key", None) is not None else "B2B"
-                qs = _channel_filter(
-                    qs.filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization)),
-                    ch,
-                )
-            else:
-                qs = _channel_filter(qs.filter(owner_organization__isnull=True), "B2C_API")
+            ch = (
+                ("B2B_API" if getattr(request, "api_key", None) is not None else "B2B")
+                if ctx.organization is not None
+                else "B2C_API"
+            )
+            qs = _channel_filter(qs, ch)
         product = qs.first()
         if product is None:
             raise DomainError(f"Ürün bulunamadı: {sku}", code="PRODUCT_NOT_FOUND", status_code=404)
