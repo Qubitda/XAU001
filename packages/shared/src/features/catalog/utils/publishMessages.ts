@@ -14,10 +14,16 @@ export function formatPublishError(err: unknown): string {
   if (!(err instanceof ApiClientError)) {
     return 'Ürün yayınlanırken beklenmeyen bir hata oluştu.';
   }
+  if (err.status === 403 || err.code === 'PERMISSION_DENIED') {
+    return 'Bu ürünü yayınlama veya yayından kaldırma yetkiniz bulunmuyor.';
+  }
+  if (err.code === 'USE_PUBLISH_ENDPOINT') {
+    return 'Ürünü yayına almak için satırdaki veya modaldaki Yayınla butonunu kullanın.';
+  }
   const missing = err.details?.missing;
   if (err.code === 'NOT_PUBLISHABLE' && Array.isArray(missing) && missing.length > 0) {
     const labels = missing.map((code) => MISSING_PUBLISH_REASON_LABELS[code] ?? code);
     return `Ürün yayınlanamadı: ${labels.join(' · ')}.`;
   }
-  return err.message;
+  return err.message || 'Ürün yayınlanırken bir hata oluştu.';
 }
