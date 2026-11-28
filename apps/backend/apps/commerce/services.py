@@ -1367,12 +1367,26 @@ def transition_b2b_order_status(*, order_no: str, next_status: str, actor=None) 
 
 
 @transaction.atomic
-def reorder_b2b_order(*, order_no: str, organization: Organization, user, is_ops: bool = False) -> list[B2bDraftLine]:
+def reorder_b2b_order(
+    *,
+    order_no: str,
+    organization: Organization,
+    user,
+    is_ops: bool = False,
+    authorized_branch_ids: list | None = None,
+) -> list[B2bDraftLine]:
     order = B2bOrder.objects.filter(order_no=order_no).prefetch_related("lines").first()
     if order is None:
         raise DomainError(f"Sipariş bulunamadı: {order_no}", code="ORDER_NOT_FOUND", status_code=404)
     if not is_ops and order.organization_id != organization.id:
         raise DomainError("Başka firmaya ait sipariş kaydına erişilemez.", code="TENANT_ISOLATION_VIOLATION", status_code=403)
+    if not is_ops and authorized_branch_ids is not None and order.branch_id is not None:
+        if order.branch_id not in authorized_branch_ids:
+            raise DomainError(
+                "Başka şubeye ait sipariş kaydına erişilemez.",
+                code="BRANCH_ACCESS_DENIED",
+                status_code=403,
+            )
 
     items_payload = [
         {

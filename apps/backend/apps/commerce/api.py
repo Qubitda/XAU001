@@ -9,7 +9,7 @@ from apps.idempotency.mixins import IdempotentCreateMixin
 from apps.authorization.permissions import HasPortalPermission, IsB2bOrganizationMember
 from apps.common.responses import envelope_response
 from apps.market.services import get_current_rate_snapshot
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import get_authorized_branches, resolve_tenant_context
 from apps.pricing.services import get_latest_price_lock, get_or_refresh_price_lock
 from config.exceptions import DomainError
 from .models import B2bDraftLine, B2bOrder, B2cCartItem, B2cOrder
@@ -507,6 +507,33 @@ class B2bDraftLineDetailView(APIView):
         return envelope_response(_serialize_b2b_draft(ctx.organization, ctx.branch), request)
 
 
+def _b2b_authorized_branch_ids(ctx) -> list:
+    if ctx.is_ops or ctx.membership is None:
+        return []
+    return [b.id for b in get_authorized_branches(ctx.membership)]
+
+
+def _scope_b2b_orders_qs(qs, ctx):
+    if ctx.is_ops:
+        return qs
+    qs = qs.filter(organization=ctx.organization)
+    branch_ids = _b2b_authorized_branch_ids(ctx)
+    if branch_ids:
+        return qs.filter(branch_id__in=branch_ids)
+    return qs.filter(branch__isnull=True)
+
+
+def _assert_b2b_draft_branch_access(ctx) -> None:
+    if ctx.is_ops or ctx.organization is None:
+        return
+    if ctx.organization.branches.filter(is_active=True).exists() and not _b2b_authorized_branch_ids(ctx):
+        raise DomainError(
+            "Bu şubeye erişim yetkiniz bulunmuyor.",
+            code="BRANCH_ACCESS_DENIED",
+            status_code=403,
+        )
+
+
 class B2bOrdersView(IdempotentCreateMixin, APIView):
     permission_classes = [IsB2bOrganizationMember]
 
@@ -515,8 +542,7 @@ class B2bOrdersView(IdempotentCreateMixin, APIView):
         qs = B2bOrder.objects.select_related(
             "organization", "branch", "created_by", "rate_snapshot"
         ).prefetch_related("lines")
-        if not ctx.is_ops:
-            qs = qs.filter(organization=ctx.organization)
+        qs = _scope_b2b_orders_qs(qs, ctx)
         return envelope_response([_serialize_b2b_order(o) for o in qs], request)
 
     def post(self, request: Request):
@@ -542,6 +568,7 @@ class B2bOrderReorderView(APIView):
             organization=ctx.organization,
             user=request.user,
             is_ops=ctx.is_ops,
+            authorized_branch_ids=None if ctx.is_ops else _b2b_authorized_branch_ids(ctx),
         )
         return envelope_response(_serialize_b2b_draft(ctx.organization, ctx.branch), request)
 
@@ -610,6 +637,7 @@ class B2bDraftProformaPdfView(APIView):
         from .proforma_pdf import build_text_pdf, draft_proforma_lines
 
         ctx = resolve_tenant_context(request, require_organization=True)
+        _assert_b2b_draft_branch_access(ctx)
         lines = list(B2bDraftLine.objects.filter(organization=ctx.organization).order_by("-updated_at"))
         if not lines:
             raise DomainError("Taslak boş — PDF oluşturulamaz.", code="EMPTY_DRAFT", status_code=400)
@@ -641,6 +669,13 @@ class B2bOrderProformaPdfView(APIView):
         )
         if order is None:
             raise DomainError("Sipariş bulunamadı.", code="NOT_FOUND", status_code=404)
+        if not ctx.is_ops and order.branch_id is not None:
+            if order.branch_id not in _b2b_authorized_branch_ids(ctx):
+                raise DomainError(
+                    "Bu şubeye ait siparişe erişim yetkiniz bulunmuyor.",
+                    code="BRANCH_ACCESS_DENIED",
+                    status_code=403,
+                )
         pdf = build_text_pdf(order_proforma_lines(order), title="TARA DIAMOND B2B PROFORMA")
         resp = HttpResponse(pdf, content_type="application/pdf")
         resp["Content-Disposition"] = f'attachment; filename="{order.order_no}-proforma.pdf"'
