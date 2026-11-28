@@ -12,7 +12,11 @@ from apps.audit.services import record_audit
 from apps.authorization.permissions import HasPortalPermission
 from apps.catalog.models import ProductModel, ProductVariant, SupplierOffer
 from apps.common.responses import MONEY_Q, apply_safe_ordering, dec_str, envelope_response, paginated_envelope_response
-from apps.organizations.selectors import resolve_active_organization, resolve_tenant_context
+from apps.organizations.selectors import (
+    resolve_active_organization,
+    resolve_tenant_context,
+    scope_queryset_to_organization,
+)
 from config.exceptions import DomainError
 
 from .serializers import _apply_filters, _products_queryset
@@ -107,11 +111,10 @@ class SupplierProductListView(APIView):
     def get(self, request: Request):
         ctx = resolve_tenant_context(request)
         qs = _products_queryset().exclude(catalog_status=ProductModel.CatalogStatus.ARCHIVED)
-        if not ctx.is_ops:
-            if ctx.organization is None:
-                qs = qs.none()
-            else:
-                qs = qs.filter(Q(owner_organization__isnull=True) | Q(owner_organization=ctx.organization))
+        if not ctx.is_ops and ctx.organization is None:
+            qs = qs.none()
+        else:
+            qs = scope_queryset_to_organization(qs, ctx, org_field="owner_organization", include_shared=True)
         qs = _apply_filters(qs, request)
         qs = apply_safe_ordering(
             qs,
@@ -132,11 +135,7 @@ class SupplierOfferListCreateView(APIView):
     def get(self, request: Request):
         ctx = resolve_tenant_context(request)
         qs = SupplierOffer.objects.select_related("product", "variant", "supplier_organization").filter(is_active=True)
-        if not ctx.is_ops:
-            if ctx.organization is None:
-                qs = qs.none()
-            else:
-                qs = qs.filter(supplier_organization=ctx.organization)
+        qs = scope_queryset_to_organization(qs, ctx, org_field="supplier_organization")
         status_filter = (request.query_params.get("status") or "").strip().upper()
         if status_filter:
             qs = qs.filter(status=status_filter)
