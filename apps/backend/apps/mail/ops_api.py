@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 from apps.authorization.permissions import HasPortalPermission
 from apps.common.responses import envelope_response
-from apps.organizations.selectors import resolve_tenant_context
+from apps.organizations.selectors import resolve_tenant_context, scope_queryset_to_organization
 from config.exceptions import DomainError
 
 from .crypto import encrypt_secret
@@ -75,10 +75,9 @@ class OpsSmtpSettingsView(APIView):
     def get(self, request: Request):
         ctx = resolve_tenant_context(request)
         qs = SmtpSetting.objects.select_related("organization").order_by("-is_active", "-updated_at")
-        if not ctx.is_ops:
-            if ctx.organization is None:
-                raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
-            qs = qs.filter(organization=ctx.organization)
+        if not ctx.is_ops and ctx.organization is None:
+            raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
+        qs = scope_queryset_to_organization(qs, ctx)
         return envelope_response([_ser_smtp(r) for r in qs[:100]], request)
 
     def post(self, request: Request):
@@ -127,10 +126,9 @@ class OpsEmailTemplatesView(APIView):
     def get(self, request: Request):
         ctx = resolve_tenant_context(request)
         qs = EmailTemplate.objects.select_related("organization").all()
-        if not ctx.is_ops:
-            if ctx.organization is None:
-                raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
-            qs = qs.filter(organization=ctx.organization)
+        if not ctx.is_ops and ctx.organization is None:
+            raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
+        qs = scope_queryset_to_organization(qs, ctx)
         key = (request.query_params.get("templateKey") or "").strip()
         if key:
             qs = qs.filter(template_key=key)
@@ -167,10 +165,9 @@ class OpsMailLogsView(APIView):
     def get(self, request: Request):
         ctx = resolve_tenant_context(request)
         qs = MailLog.objects.all()
-        if not ctx.is_ops:
-            if ctx.organization is None:
-                raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
-            qs = qs.filter(organization=ctx.organization)
+        if not ctx.is_ops and ctx.organization is None:
+            raise DomainError("Organizasyon gerekli.", code="ORG_REQUIRED", status_code=403)
+        qs = scope_queryset_to_organization(qs, ctx)
         status_f = (request.query_params.get("status") or "").strip().upper()
         if status_f:
             qs = qs.filter(status=status_f)
